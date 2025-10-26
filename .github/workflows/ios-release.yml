@@ -1,0 +1,71 @@
+name: iOS Release Build
+
+on:
+  push:
+    tags:
+      - 'v*' # Запускається при створенні тегу версії (v1.0.0, v1.1.0, тощо)
+  workflow_dispatch:
+
+jobs:
+  build-ios-release:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout код
+      uses: actions/checkout@v4
+      
+    - name: Налаштування Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        
+    - name: Встановлення Apple Certificate
+      uses: apple-actions/import-codesign-certs@v2
+      with:
+        p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+        p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        
+    - name: Встановлення Provisioning Profile
+      uses: apple-actions/download-provisioning-profiles@v1
+      with:
+        bundle-id: com.example.nastya_app # Замініть на ваш Bundle ID
+        issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+        api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+        api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        
+    - name: Отримання залежностей
+      run: flutter pub get
+      
+    - name: Збірка iOS з підписом
+      run: |
+        flutter build ios --release
+        
+    - name: Створення IPA
+      run: |
+        xcodebuild -workspace ios/Runner.xcworkspace \
+                   -scheme Runner \
+                   -sdk iphoneos \
+                   -configuration Release \
+                   -archivePath build/ios/Runner.xcarchive \
+                   archive
+        
+        xcodebuild -exportArchive \
+                   -archivePath build/ios/Runner.xcarchive \
+                   -exportOptionsPlist ios/ExportOptions.plist \
+                   -exportPath build/ios/ipa
+                   
+    - name: Завантаження до App Store Connect
+      uses: apple-actions/upload-testflight-build@v1
+      with:
+        app-path: build/ios/ipa/Runner.ipa
+        issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+        api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+        api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        
+    - name: Завантаження артефакту
+      uses: actions/upload-artifact@v4
+      with:
+        name: iOS Release IPA
+        path: build/ios/ipa/Runner.ipa
+        retention-days: 90

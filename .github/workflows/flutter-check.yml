@@ -1,0 +1,50 @@
+name: Flutter Build Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Налаштування Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        
+    - name: Отримання залежностей
+      run: flutter pub get
+      
+    - name: Аналіз коду
+      run: flutter analyze --no-fatal-infos
+      
+    - name: Запуск тестів
+      run: flutter test
+      
+    - name: Перевірка збірки Android
+      run: flutter build apk --debug
+
+  build-ios-simulator:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Налаштування Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        
+    - name: Отримання залежностей
+      run: flutter pub get
+      
+    - name: Збірка для iOS симулятора
+      run: flutter build ios --simulator --debug

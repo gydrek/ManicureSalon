@@ -1,0 +1,49 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Дозволяє запускати вручну
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout код
+      uses: actions/checkout@v4
+      
+    - name: Налаштування Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0' # Або ваша версія Flutter
+        channel: 'stable'
+        
+    - name: Отримання залежностей
+      run: flutter pub get
+      
+    - name: Аналіз коду
+      run: flutter analyze
+      
+    - name: Запуск тестів
+      run: flutter test
+      
+    - name: Збірка iOS (без підпису)
+      run: |
+        flutter build ios --release --no-codesign
+        
+    - name: Створення архіву
+      run: |
+        cd build/ios/iphoneos
+        mkdir -p Payload
+        cp -r Runner.app Payload/
+        zip -r ../../../nastya_app_ios.zip Payload/
+        
+    - name: Завантаження артефакту
+      uses: actions/upload-artifact@v4
+      with:
+        name: iOS Build
+        path: nastya_app_ios.zip
+        retention-days: 30
