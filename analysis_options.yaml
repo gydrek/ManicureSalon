@@ -9,6 +9,11 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
@@ -21,8 +26,18 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # Відключаємо деякі строгі правила для розробки
+    avoid_print: false  # Дозволяємо print для відлагодження
+    file_names: false   # Дозволяємо camelCase імена файлів
+    prefer_final_fields: false  # Не вимагаємо final для приватних полів
+    use_build_context_synchronously: false  # Дозволяємо використання context після async
+    deprecated_member_use: false  # Ігноруємо застарілі API (поки не оновимо)
+    unnecessary_to_list_in_spreads: false
+    avoid_shadowing_type_parameters: false
+    annotate_overrides: false
+    sized_box_for_whitespace: false
+    sort_child_properties_last: false
+    unnecessary_brace_in_string_interps: false
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

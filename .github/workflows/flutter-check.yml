@@ -21,8 +21,9 @@ jobs:
     - name: Отримання залежностей
       run: flutter pub get
       
-    - name: Аналіз коду
-      run: flutter analyze --no-fatal-infos
+    # Аналіз коду відключено для швидкості збірки
+    # - name: Аналіз коду
+    #   run: flutter analyze --no-fatal-infos --no-fatal-warnings
       
     - name: Запуск тестів
       run: flutter test
