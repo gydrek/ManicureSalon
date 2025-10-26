@@ -17,8 +17,7 @@ jobs:
     - name: Налаштування Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.24.0'
-        channel: 'stable'
+        channel: 'stable' # Використовує найновішу стабільну версію
         
     - name: Встановлення Apple Certificate
       uses: apple-actions/import-codesign-certs@v2

@@ -16,8 +16,7 @@ jobs:
     - name: Налаштування Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.24.0'
-        channel: 'stable'
+        channel: 'stable' # Використовує найновішу стабільну версію
         
     - name: Отримання залежностей
       run: flutter pub get
@@ -40,8 +39,7 @@ jobs:
     - name: Налаштування Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.24.0'
-        channel: 'stable'
+        channel: 'stable' # Використовує найновішу стабільну версію
         
     - name: Отримання залежностей
       run: flutter pub get
