@@ -471,12 +471,71 @@ class FirestoreService {
   Future<bool> updateClient(String clientId, Client client) async {
     try {
       print('Оновлюємо клієнта в Firestore: ID=$clientId, дані=${client.toFirestore()}');
+      
+      // Спочатку отримуємо старі дані клієнта для порівняння
+      final oldClientDoc = await _clientsCollection.doc(clientId).get();
+      final oldClientData = oldClientDoc.data() as Map<String, dynamic>?;
+      
+      // Оновлюємо клієнта в колекції clients
       await _clientsCollection.doc(clientId).update(client.toFirestore());
-      print('Клієнт оновлений успішно');
+      
+      // Якщо змінилося ім'я або телефон, оновлюємо всі сесії цього клієнта
+      if (oldClientData != null) {
+        final oldName = oldClientData['name'] as String?;
+        final oldPhone = oldClientData['phone'] as String?;
+        
+        if (oldName != client.name || oldPhone != client.phone) {
+          print('Ім\'я або телефон змінились, оновлюємо сесії...');
+          await _updateClientSessionsData(clientId, oldName ?? '', oldPhone ?? '', 
+                                          client.name, client.phone ?? '');
+        }
+      }
+      
+      print('Клієнт та його сесії оновлені успішно');
       return true;
     } catch (e) {
       print('Помилка оновлення клієнта: $e');
       return false;
+    }
+  }
+
+  /// Оновити дані клієнта у всіх його сесіях
+  Future<void> _updateClientSessionsData(String clientId, String oldName, String oldPhone, 
+                                        String newName, String newPhone) async {
+    try {
+      // Знаходимо всі сесії за старими даними клієнта
+      Query query = _sessionsCollection.where('clientId', isEqualTo: clientId);
+      
+      // Якщо є старі дані, шукаємо за ім'ям та телефоном
+      if (oldName.isNotEmpty && oldPhone.isNotEmpty) {
+        final alternativeQuery = await _sessionsCollection
+            .where('clientName', isEqualTo: oldName)
+            .where('phone', isEqualTo: oldPhone)
+            .get();
+        
+        // Оновлюємо сесії знайдені за ім'ям та телефоном
+        for (final doc in alternativeQuery.docs) {
+          await doc.reference.update({
+            'clientId': clientId,
+            'clientName': newName,
+            'phone': newPhone,
+          });
+          print('Оновлено сесію ${doc.id}: $oldName->$newName, $oldPhone->$newPhone');
+        }
+      }
+      
+      // Оновлюємо сесії знайдені за clientId
+      final sessionsSnapshot = await query.get();
+      for (final doc in sessionsSnapshot.docs) {
+        await doc.reference.update({
+          'clientName': newName,
+          'phone': newPhone,
+        });
+        print('Оновлено сесію ${doc.id} за clientId: $newName, $newPhone');
+      }
+      
+    } catch (e) {
+      print('Помилка оновлення сесій клієнта: $e');
     }
   }
 
