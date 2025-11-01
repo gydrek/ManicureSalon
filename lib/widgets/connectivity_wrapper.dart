@@ -9,10 +9,7 @@ import 'package:nastya_app/providers/language_provider.dart';
 class ConnectivityWrapper extends StatelessWidget {
   final Widget child;
 
-  const ConnectivityWrapper({
-    super.key,
-    required this.child,
-  });
+  const ConnectivityWrapper({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +29,18 @@ class ConnectivityWrapper extends StatelessWidget {
 
 /// Mixin для додавання методів роботи з підключенням до сторінок
 mixin ConnectivityMixin<T extends StatefulWidget> on State<T> {
-  
   /// Перевірити чи є підключення перед виконанням операції
   bool checkConnection() {
-    final connectivity = Provider.of<ConnectivityService>(context, listen: false);
-    
+    final connectivity = Provider.of<ConnectivityService>(
+      context,
+      listen: false,
+    );
+
     if (!connectivity.isConnected) {
       _showNoInternetDialog();
       return false;
     }
-    
+
     return true;
   }
 
@@ -50,11 +49,7 @@ mixin ConnectivityMixin<T extends StatefulWidget> on State<T> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        icon: Icon(
-          Icons.wifi_off,
-          color: Colors.red,
-          size: 48,
-        ),
+        icon: Icon(Icons.wifi_off, color: Colors.red, size: 48),
         title: Consumer<LanguageProvider>(
           builder: (context, language, child) {
             return Text(
@@ -65,7 +60,10 @@ mixin ConnectivityMixin<T extends StatefulWidget> on State<T> {
         content: Consumer<LanguageProvider>(
           builder: (context, language, child) {
             return Text(
-              language.getText('Для виконання цієї операції необхідне підключення до інтернету.', 'Для выполнения этой операции необходимо подключение к интернету.'),
+              language.getText(
+                'Для виконання цієї операції необхідне підключення до інтернету.',
+                'Для выполнения этой операции необходимо подключение к интернету.',
+              ),
             );
           },
         ),
@@ -74,23 +72,21 @@ mixin ConnectivityMixin<T extends StatefulWidget> on State<T> {
             onPressed: () => Navigator.of(context).pop(),
             child: Consumer<LanguageProvider>(
               builder: (context, language, child) {
-                return Text(
-                  language.getText('Зрозуміло', 'Понятно'),
-                );
+                return Text(language.getText('Зрозуміло', 'Понятно'));
               },
             ),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              Provider.of<ConnectivityService>(context, listen: false)
-                  .checkConnectivity();
+              Provider.of<ConnectivityService>(
+                context,
+                listen: false,
+              ).checkConnectivity();
             },
             child: Consumer<LanguageProvider>(
               builder: (context, language, child) {
-                return Text(
-                  language.getText('Повторити', 'Повторить'),
-                );
+                return Text(language.getText('Повторити', 'Повторить'));
               },
             ),
           ),
@@ -105,17 +101,23 @@ mixin ConnectivityMixin<T extends StatefulWidget> on State<T> {
       throw Consumer<LanguageProvider>(
         builder: (context, language, child) {
           return Text(
-            language.getText('Немає підключення до інтернету', 'Нет подключения к интернету'),
+            language.getText(
+              'Немає підключення до інтернету',
+              'Нет подключения к интернету',
+            ),
           );
         },
       );
     }
-    
+
     try {
       return await operation();
     } catch (e) {
       // Якщо помилка пов'язана з мережею, перевіряємо підключення
-      final connectivity = Provider.of<ConnectivityService>(context, listen: false);
+      final connectivity = Provider.of<ConnectivityService>(
+        context,
+        listen: false,
+      );
       connectivity.checkConnectivity();
       rethrow;
     }

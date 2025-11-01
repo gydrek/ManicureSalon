@@ -11,51 +11,51 @@ class ConnectivityService extends ChangeNotifier {
 
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  
+
   bool _isConnected = true; // Оптимістично припускаємо, що є підключення
   bool _isChecking = false; // Не показуємо перевірку на початку
-  
+
   /// Чи є підключення до інтернету
   bool get isConnected => _isConnected;
-  
+
   /// Чи відбувається перевірка підключення
   bool get isChecking => _isChecking;
-  
+
   /// Чи сервіс готовий (перевірка завершена хоча б раз)
   bool get isReady => !_isChecking;
 
   /// Ініціалізація сервісу
   Future<void> initialize() async {
     print('🌐 Ініціалізуємо ConnectivityService');
-    
+
     // Слухаємо зміни підключення (основна функція сервісу)
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      (List<ConnectivityResult> results) {
-        print('📱 Зміна підключення: $results');
-        _onConnectivityChanged(results);
-      },
-    );
-    
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
+      print('📱 Зміна підключення: $results');
+      _onConnectivityChanged(results);
+    });
+
     // Швидка початкова перевірка у фоні (не блокуємо UI)
     checkConnectivity();
-    
+
     print('✅ ConnectivityService ініціалізовано');
   }
 
   /// Перевірка підключення до інтернету
   Future<void> checkConnectivity() async {
     if (_isChecking) return;
-    
+
     _isChecking = true;
     notifyListeners();
-    
+
     try {
       print('🔍 Починаємо перевірку підключення...');
-      
+
       // Перевіряємо наявність з'єднання
       final connectivityResults = await _connectivity.checkConnectivity();
       print('🔍 Результат connectivity: $connectivityResults');
-      
+
       if (connectivityResults.contains(ConnectivityResult.none)) {
         _isConnected = false;
         print('❌ Немає підключення до мережі');
@@ -69,7 +69,9 @@ class ConnectivityService extends ChangeNotifier {
             return true; // При таймауті припускаємо що є підключення
           },
         );
-        print(_isConnected ? '✅ Інтернет підключено' : '❌ Інтернет недоступний');
+        print(
+          _isConnected ? '✅ Інтернет підключено' : '❌ Інтернет недоступний',
+        );
       }
     } catch (e) {
       print('❌ Помилка перевірки підключення: $e');
@@ -78,7 +80,9 @@ class ConnectivityService extends ChangeNotifier {
     } finally {
       _isChecking = false;
       notifyListeners();
-      print('🔍 Перевірка завершена: isConnected=$_isConnected, isChecking=$_isChecking');
+      print(
+        '🔍 Перевірка завершена: isConnected=$_isConnected, isChecking=$_isChecking',
+      );
     }
   }
 
@@ -86,13 +90,15 @@ class ConnectivityService extends ChangeNotifier {
   Future<bool> _hasInternetConnection() async {
     try {
       print('🔍 Перевіряємо доступність інтернету (google.com)...');
-      
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(Duration(seconds: 2)); // Короткий таймаут
-      
-      final hasConnection = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(Duration(seconds: 2)); // Короткий таймаут
+
+      final hasConnection =
+          result.isNotEmpty && result[0].rawAddress.isNotEmpty;
       print('🔍 Результат перевірки google.com: $hasConnection');
-      
+
       return hasConnection;
     } catch (e) {
       print('🔍 Помилка перевірки google.com: $e');

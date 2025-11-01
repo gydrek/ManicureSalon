@@ -33,11 +33,7 @@ class ConnectivityBanner extends StatelessWidget {
             bottom: false,
             child: Row(
               children: [
-                Icon(
-                  Icons.wifi_off,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                Icon(Icons.wifi_off, color: Colors.white, size: 20),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -47,7 +43,10 @@ class ConnectivityBanner extends StatelessWidget {
                       Consumer<LanguageProvider>(
                         builder: (context, language, child) {
                           return Text(
-                            language.getText('Немає підключення до інтернету', 'Нет подключения к интернету'),
+                            language.getText(
+                              'Немає підключення до інтернету',
+                              'Нет подключения к интернету',
+                            ),
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 14,
@@ -60,7 +59,10 @@ class ConnectivityBanner extends StatelessWidget {
                       Consumer<LanguageProvider>(
                         builder: (context, language, child) {
                           return Text(
-                            language.getText('Підключіться до Wi-Fi або мобільного інтернету', 'Подключитесь к Wi-Fi или мобильному интернету'),
+                            language.getText(
+                              'Підключіться до Wi-Fi або мобільного інтернету',
+                              'Подключитесь к Wi-Fi или мобильному интернету',
+                            ),
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 12,
@@ -74,26 +76,29 @@ class ConnectivityBanner extends StatelessWidget {
                 // Кнопка повторної перевірки
                 if (!connectivity.isChecking)
                   Consumer<LanguageProvider>(
-                  builder: (context, language, child) {
-                    return IconButton(
-                      onPressed: () {
-                        connectivity.checkConnectivity();
-                      },
-                      icon: Icon(
-                        Icons.refresh,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      tooltip: language.getText('Перевірити підключення', 'Проверить подключение'),
-                      padding: EdgeInsets.all(4),
-                      constraints: BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                    );
-                  },
-                ),
-                
+                    builder: (context, language, child) {
+                      return IconButton(
+                        onPressed: () {
+                          connectivity.checkConnectivity();
+                        },
+                        icon: Icon(
+                          Icons.refresh,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        tooltip: language.getText(
+                          'Перевірити підключення',
+                          'Проверить подключение',
+                        ),
+                        padding: EdgeInsets.all(4),
+                        constraints: BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                      );
+                    },
+                  ),
+
                 // Індикатор перевірки
                 if (connectivity.isChecking)
                   SizedBox(

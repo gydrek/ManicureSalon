@@ -24,10 +24,7 @@ class NoInternetScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.red.shade200,
-                      width: 2,
-                    ),
+                    border: Border.all(color: Colors.red.shade200, width: 2),
                   ),
                   child: Icon(
                     Icons.wifi_off,
@@ -35,14 +32,17 @@ class NoInternetScreen extends StatelessWidget {
                     color: Colors.red.shade400,
                   ),
                 ),
-                
+
                 SizedBox(height: 32),
-                
+
                 // Заголовок
                 Consumer<LanguageProvider>(
                   builder: (context, language, child) {
                     return Text(
-                      language.getText('Немає підключення до інтернету', 'Нет подключения к интернету'),
+                      language.getText(
+                        'Немає підключення до інтернету',
+                        'Нет подключения к интернету',
+                      ),
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -52,40 +52,49 @@ class NoInternetScreen extends StatelessWidget {
                     );
                   },
                 ),
-                
+
                 SizedBox(height: 16),
-                
+
                 // Опис
                 Consumer<LanguageProvider>(
                   builder: (context, language, child) {
                     return Text(
-                      language.getText('Для роботи застосунку необхідне підключення до інтернету.\nПідключіться до Wi-Fi або мобільного інтернету.', 'Для работы приложения необходимо подключение к интернету.\nПодключитесь к Wi-Fi или мобильному интернету.'),
+                      language.getText(
+                        'Для роботи застосунку необхідне підключення до інтернету.\nПідключіться до Wi-Fi або мобільного інтернету.',
+                        'Для работы приложения необходимо подключение к интернету.\nПодключитесь к Wi-Fi или мобильному интернету.',
+                      ),
                       style: TextStyle(
                         fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
                         height: 1.5,
                       ),
                       textAlign: TextAlign.center,
                     );
                   },
                 ),
-                
+
                 SizedBox(height: 48),
-                
+
                 // Кнопка повторної перевірки
                 Consumer<ConnectivityService>(
                   builder: (context, connectivity, child) {
                     return SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: connectivity.isChecking 
-                            ? null 
+                        onPressed: connectivity.isChecking
+                            ? null
                             : () {
                                 connectivity.checkConnectivity();
                               },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
                           padding: EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -109,7 +118,10 @@ class NoInternetScreen extends StatelessWidget {
                                   Consumer<LanguageProvider>(
                                     builder: (context, language, child) {
                                       return Text(
-                                        language.getText('Перевіряємо підключення...', 'Проверяем подключение...'),
+                                        language.getText(
+                                          'Перевіряємо підключення...',
+                                          'Проверяем подключение...',
+                                        ),
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -127,7 +139,10 @@ class NoInternetScreen extends StatelessWidget {
                                   Consumer<LanguageProvider>(
                                     builder: (context, language, child) {
                                       return Text(
-                                        language.getText('Спробувати знову', 'Попробовать снова'),
+                                        language.getText(
+                                          'Спробувати знову',
+                                          'Попробовать снова',
+                                        ),
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -141,9 +156,9 @@ class NoInternetScreen extends StatelessWidget {
                     );
                   },
                 ),
-                
+
                 SizedBox(height: 24),
-                
+
                 // Додаткові поради
                 Container(
                   padding: EdgeInsets.all(16),
@@ -151,7 +166,9 @@ class NoInternetScreen extends StatelessWidget {
                     color: Theme.of(context).colorScheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ),
                   child: Column(
@@ -167,10 +184,15 @@ class NoInternetScreen extends StatelessWidget {
                           Consumer<LanguageProvider>(
                             builder: (context, language, child) {
                               return Text(
-                                language.getText('Поради для підключення:', 'Советы по подключению:'),
+                                language.getText(
+                                  'Поради для підключення:',
+                                  'Советы по подключению:',
+                                ),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               );
                             },
@@ -178,10 +200,26 @@ class NoInternetScreen extends StatelessWidget {
                         ],
                       ),
                       SizedBox(height: 12),
-                      _buildTip(context, '• Перевірте налаштування Wi-Fi', '• Проверьте настройки Wi-Fi'),
-                      _buildTip(context, '• Увімкніть мобільні дані', '• Включите мобильные данные'),
-                      _buildTip(context, '• Перезапустіть роутер', '• Перезапустите роутер'),
-                      _buildTip(context, '• Зверніться до провайдера', '• Обратитесь к провайдеру'),
+                      _buildTip(
+                        context,
+                        '• Перевірте налаштування Wi-Fi',
+                        '• Проверьте настройки Wi-Fi',
+                      ),
+                      _buildTip(
+                        context,
+                        '• Увімкніть мобільні дані',
+                        '• Включите мобильные данные',
+                      ),
+                      _buildTip(
+                        context,
+                        '• Перезапустіть роутер',
+                        '• Перезапустите роутер',
+                      ),
+                      _buildTip(
+                        context,
+                        '• Зверніться до провайдера',
+                        '• Обратитесь к провайдеру',
+                      ),
                     ],
                   ),
                 ),
@@ -193,7 +231,11 @@ class NoInternetScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTip(BuildContext context, String ukrainianText, String russianText) {
+  Widget _buildTip(
+    BuildContext context,
+    String ukrainianText,
+    String russianText,
+  ) {
     return Padding(
       padding: EdgeInsets.only(bottom: 4),
       child: Align(
@@ -202,10 +244,7 @@ class NoInternetScreen extends StatelessWidget {
           builder: (context, language, child) {
             return Text(
               language.getText(ukrainianText, russianText),
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
             );
           },
         ),

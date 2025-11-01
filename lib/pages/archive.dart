@@ -10,7 +10,6 @@ import 'package:nastya_app/providers/app_state_provider.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'package:nastya_app/widgets/connectivity_wrapper.dart';
 
-
 class ArchivePage extends StatefulWidget {
   const ArchivePage({super.key});
 
@@ -18,13 +17,13 @@ class ArchivePage extends StatefulWidget {
   State<ArchivePage> createState() => _ArchivePageState();
 }
 
-class _ArchivePageState extends State<ArchivePage> {
+class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
   final FirestoreService _firestoreService = FirestoreService();
-  
+
   List<Session> _allSessions = [];
   List<Session> _filteredSessions = [];
   List<Master> _masters = [];
-  
+
   String _selectedMasterFilter = 'Всі майстрині';
   String _selectedStatusFilter = 'Всі статуси';
   DateTime? _selectedDate;
@@ -32,20 +31,28 @@ class _ArchivePageState extends State<ArchivePage> {
 
   String _getLocalizedService(String service, LanguageProvider language) {
     switch (service) {
+      case 'Манікюр класичний':
+        return language.getText('Манікюр класичний', 'Маникюр классический');
+      case 'Покриття гель-лак (руки)':
+        return language.getText('Покриття гель-лак (руки)', 'Покрытие гель-лак (руки)');
       case 'Манікюр':
         return language.getText('Манікюр', 'Маникюр');
-      case 'Педикюр':
-        return language.getText('Педикюр', 'Педикюр');
-      case 'Наращування нігтів':
-        return language.getText('Наращування нігтів', 'Наращивание ногтей');
-      case 'Дизайн нігтів':
-        return language.getText('Дизайн нігтів', 'Дизайн ногтей');
-      case 'Покриття гель-лак':
-        return language.getText('Покриття гель-лак', 'Покрытие гель-лак');
-      case 'Зняття покриття':
-        return language.getText('Зняття покриття', 'Снятие покрытия');
-      case 'Корекція':
-        return language.getText('Корекція', 'Коррекция');
+      case 'Наращування нігтів (стандарт)':
+        return language.getText('Наращування нігтів (стандарт)', 'Наращивание ногтей (стандарт)');
+      case 'Наращування нігтів (довге)':
+        return language.getText('Наращування нігтів (довге)', 'Наращивание ногтей (длинное)');
+      case 'Манікюр чоловічий':
+        return language.getText('Манікюр чоловічий', 'Маникюр мужской');
+      case 'Педикюр класичний':
+        return language.getText('Педикюр класичний', 'Педикюр классический');
+      case 'Педикюр класиний + покриття гель-лак':
+        return language.getText('Педикюр класиний + покриття гель-лак', 'Педикюр классический + покрытие гель-лак');
+      case 'Покриття гель-лак (ноги)':
+        return language.getText('Покриття гель-лак (ноги)', 'Покрытие гель-лак (ноги)');
+      case 'Наращування вій':
+        return language.getText('Наращування вій', 'Наращивание ресниц');
+      case 'Наращування нижніх вій':
+        return language.getText('Наращування нижніх вій', 'Наращивание нижних ресниц');
       default:
         return service;
     }
@@ -67,27 +74,50 @@ class _ArchivePageState extends State<ArchivePage> {
       language.getText('грудня', 'декабря'),
     ];
   }
-  
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
-  
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Коли додаток повертається в активний стан, оновлюємо дані
+    if (state == AppLifecycleState.resumed) {
+      print('📱 Архів: додаток повернувся в активний стан - оновлюємо дані...');
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      // Форсуємо оновлення для синхронізації з іншими пристроями
+      appState.refreshAllData(forceRefresh: true).then((_) {
+        // Також оновлюємо локальні дані архіву
+        _loadData();
+      });
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Спочатку намагаємося використати дані з AppStateProvider
       final appState = Provider.of<AppStateProvider>(context, listen: false);
-      
+
       if (appState.masters.isNotEmpty) {
         // Використовуємо кешовані дані з AppStateProvider
         print('📦 Використовуємо кешовані дані з AppStateProvider');
         final allSessionsFromProvider = _getAllSessionsFromProvider(appState);
-        
+
         setState(() {
           _allSessions = allSessionsFromProvider;
           _filteredSessions = allSessionsFromProvider;
@@ -99,7 +129,7 @@ class _ArchivePageState extends State<ArchivePage> {
         print('🔄 AppStateProvider порожній, завантажуємо напряму');
         final sessions = await _firestoreService.getAllSessions();
         final masters = await _firestoreService.getMasters();
-        
+
         setState(() {
           _allSessions = sessions;
           _filteredSessions = sessions;
@@ -107,7 +137,7 @@ class _ArchivePageState extends State<ArchivePage> {
           _isLoading = false;
         });
       }
-      
+
       _applyFilters();
     } catch (e) {
       print('Помилка завантаження даних: $e');
@@ -116,16 +146,59 @@ class _ArchivePageState extends State<ArchivePage> {
       });
     }
   }
-  
+
+  /// Примусово перезавантажити дані з бази даних (без використання кешу)
+  Future<void> _forceReloadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('🔄 Примусове перезавантаження даних з БД (очищаємо кеш)...');
+
+      // Використовуємо покращену систему кешування з AppStateProvider
+      final appStateProvider = Provider.of<AppStateProvider>(
+        context,
+        listen: false,
+      );
+
+      // Очищаємо кеш і примусово перезавантажуємо всі дані
+      await appStateProvider.forceReloadData(
+        masters: true,
+        clients: true,
+        sessions: true,
+      );
+
+      // Отримуємо оновлені дані з провайдера
+      final sessions = await _firestoreService.getAllSessions();
+      final masters = await _firestoreService.getMasters();
+
+      setState(() {
+        _allSessions = sessions;
+        _filteredSessions = sessions;
+        _masters = masters;
+        _isLoading = false;
+      });
+
+      _applyFilters();
+      print('✅ Дані примусово перезавантажено з БД');
+    } catch (e) {
+      print('❌ Помилка примусового завантаження даних: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   // Отримуємо всі сесії з AppStateProvider
   List<Session> _getAllSessionsFromProvider(AppStateProvider appState) {
     final allSessions = <Session>[];
-    
+
     // Збираємо сесії всіх майстрів
     for (final masterId in appState.sessionsByMaster.keys) {
       allSessions.addAll(appState.sessionsByMaster[masterId] ?? []);
     }
-    
+
     // Сортуємо по даті (найновіші спочатку)
     allSessions.sort((a, b) {
       int dateCompare = b.date.compareTo(a.date);
@@ -134,28 +207,31 @@ class _ArchivePageState extends State<ArchivePage> {
       }
       return dateCompare;
     });
-    
+
     return allSessions;
   }
-  
+
   void _applyFilters() {
     setState(() {
       _filteredSessions = _allSessions.where((session) {
         // Фільтр по майстру
-        bool masterMatch = _selectedMasterFilter == 'Всі майстрині' || 
+        bool masterMatch =
+            _selectedMasterFilter == 'Всі майстрині' ||
             session.masterId == _selectedMasterFilter;
-        
+
         // Фільтр по статусу
-        bool statusMatch = _selectedStatusFilter == 'Всі статуси' || 
+        bool statusMatch =
+            _selectedStatusFilter == 'Всі статуси' ||
             session.status == _selectedStatusFilter;
-        
+
         // Фільтр по даті
-        bool dateMatch = _selectedDate == null || 
+        bool dateMatch =
+            _selectedDate == null ||
             session.date == _formatDateForComparison(_selectedDate!);
-        
+
         return masterMatch && statusMatch && dateMatch;
       }).toList();
-      
+
       // Сортуємо по даті (найновіші спочатку)
       _filteredSessions.sort((a, b) {
         int dateCompare = b.date.compareTo(a.date);
@@ -166,23 +242,23 @@ class _ArchivePageState extends State<ArchivePage> {
       });
     });
   }
-  
+
   String _formatDateForComparison(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
-  
+
   String _formatDateDisplay(DateTime date) {
     final language = Provider.of<LanguageProvider>(context, listen: false);
     final months = _getLocalizedMonths(language);
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
-  
+
   void _showDatePicker() async {
     final language = Provider.of<LanguageProvider>(context, listen: false);
-    final locale = language.currentLocale.languageCode == 'uk' 
-        ? Locale('uk', 'UA') 
+    final locale = language.currentLocale.languageCode == 'uk'
+        ? Locale('uk', 'UA')
         : Locale('ru', 'RU');
-    
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),
@@ -200,7 +276,7 @@ class _ArchivePageState extends State<ArchivePage> {
         );
       },
     );
-    
+
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
@@ -208,14 +284,14 @@ class _ArchivePageState extends State<ArchivePage> {
       _applyFilters();
     }
   }
-  
+
   void _clearDateFilter() {
     setState(() {
       _selectedDate = null;
     });
     _applyFilters();
   }
-  
+
   String _getMasterName(String masterId, String languageCode) {
     final master = _masters.firstWhere(
       (m) => m.id == masterId,
@@ -223,240 +299,242 @@ class _ArchivePageState extends State<ArchivePage> {
     );
     return master.getLocalizedName(languageCode);
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return ConnectivityWrapper(
       child: Scaffold(
-      appBar: AppBar(
-        title: Consumer<LanguageProvider>(
-          builder: (context, language, child) {
-            return Text(
-              language.getText('Архів записів', 'Архив записей'),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            );
-          },
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          GestureDetector(
-            onLongPress: _selectedDate != null ? _clearDateFilter : null,
-            child: Consumer<LanguageProvider>(
-              builder: (context, language, child) {
-                return IconButton(
-                  icon: Icon(
-                    Icons.calendar_today,
-                    color: _selectedDate != null 
-                        ? Colors.amber.shade300 
-                        : Theme.of(context).colorScheme.onPrimary,
-                  ),
-                  onPressed: _showDatePicker,
-                  tooltip: _selectedDate != null 
-                      ? '${language.getText('Вибрана дата', 'Выбранная дата')}: ${_formatDateDisplay(_selectedDate!)}}' 
-                      : language.getText('Вибрати дату', 'Выбрать дату'),
-                );
-              },
-            ),
+        appBar: AppBar(
+          title: Consumer<LanguageProvider>(
+            builder: (context, language, child) {
+              return Text(
+                language.getText('Архів записів', 'Архив записей'),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              );
+            },
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: _isLoading
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      color: Theme.of(context).colorScheme.primary,
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          elevation: 0,
+          centerTitle: true,
+          actions: [
+            GestureDetector(
+              onLongPress: _selectedDate != null ? _clearDateFilter : null,
+              child: Consumer<LanguageProvider>(
+                builder: (context, language, child) {
+                  return IconButton(
+                    icon: Icon(
+                      Icons.calendar_today,
+                      color: _selectedDate != null
+                          ? Colors.amber.shade300
+                          : Theme.of(context).colorScheme.onPrimary,
                     ),
-                    SizedBox(height: 16),
-                    Consumer<LanguageProvider>(
-                      builder: (context, language, child) {
-                        return Text(
-                          language.getText('Завантажуємо архів...', 'Загружаем архив...'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              )
-            : RefreshIndicator(
-              onRefresh: () async {
-                print('🔄 Оновлення архіву через свайп...');
-                
-                // Використовуємо AppStateProvider для примусового оновлення (для оновлення часу)
-                await Provider.of<AppStateProvider>(context, listen: false).refreshAllData(forceRefresh: true);
-                
-                // Оновлюємо локальні дані архіву
-                final appState = Provider.of<AppStateProvider>(context, listen: false);
-                final allSessionsFromProvider = _getAllSessionsFromProvider(appState);
-                
-                setState(() {
-                  _allSessions = allSessionsFromProvider;
-                  _filteredSessions = allSessionsFromProvider;
-                  _masters = appState.masters;
-                });
-                
-                _applyFilters();
-                
-                print('✅ Архів оновлено з новим часом');
-                
-                // Показуємо повідомлення про успішне оновлення
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          SizedBox(width: 8),
-                          Consumer<LanguageProvider>(
-                            builder: (context, language, child) {
-                              return Text(language.getText('Архів оновлено свайпом', 'Архив обновлен свайпом'));
-                            },
-                          ),
-                        ],
-                      ),
-                      duration: Duration(seconds: 2),
-                      backgroundColor: Colors.green,
-                    ),
+                    onPressed: _showDatePicker,
+                    tooltip: _selectedDate != null
+                        ? '${language.getText('Вибрана дата', 'Выбранная дата')}: ${_formatDateDisplay(_selectedDate!)}}'
+                        : language.getText('Вибрати дату', 'Выбрать дату'),
                   );
-                }
-              },
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    // Фільтри
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
+                },
+              ),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: _isLoading
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      child: Column(
-                        children: [
-                          Row(
+                      SizedBox(height: 16),
+                      Consumer<LanguageProvider>(
+                        builder: (context, language, child) {
+                          return Text(
+                            language.getText(
+                              'Завантажуємо архів...',
+                              'Загружаем архив...',
+                            ),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    print('🔄 Оновлення архіву через свайп...');
+
+                    // Використовуємо примусове перезавантаження для гарантованого оновлення
+                    await _forceReloadData();
+
+                    // Також оновлюємо глобальний провайдер
+                    await Provider.of<AppStateProvider>(
+                      context,
+                      listen: false,
+                    ).refreshAllData(forceRefresh: true);
+
+                    print('✅ Архів повністю оновлено');
+
+                    // Показуємо повідомлення про успішне оновлення
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
                             children: [
-                              Expanded(
-                                child: _buildMasterFilter(),
+                              Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 20,
                               ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatusFilter(),
+                              SizedBox(width: 8),
+                              Consumer<LanguageProvider>(
+                                builder: (context, language, child) {
+                                  return Text(
+                                    language.getText(
+                                      'Архів оновлено свайпом',
+                                      'Архив обновлен свайпом',
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
-                          SizedBox(height: 12),
-                          
-                          // Індикатор активного фільтра дати
-                          if (_selectedDate != null)
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              margin: EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.amber.shade200),
+                          duration: Duration(seconds: 2),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  child: SingleChildScrollView(
+                    physics: AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      children: [
+                        // Фільтри
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
                                 children: [
-                                  Icon(
-                                    Icons.calendar_today,
-                                    size: 16,
-                                    color: Colors.amber.shade700,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Consumer<LanguageProvider>(
-                                    builder: (context, language, child) {
-                                      return Text(
-                                        '${language.getText('Фільтр', 'Фильтр')}: ${_formatDateDisplay(_selectedDate!)}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.amber.shade800,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _clearDateFilter,
-                                    child: Icon(
-                                      Icons.close,
-                                      size: 16,
-                                      color: Colors.amber.shade700,
-                                    ),
-                                  ),
+                                  Expanded(child: _buildMasterFilter()),
+                                  SizedBox(width: 12),
+                                  Expanded(child: _buildStatusFilter()),
                                 ],
                               ),
-                            ),
-                          
-                          _buildStatsRow(),
-                        ],
-                      ),
-                    ),
-                    
-                    // Інформація про останнє оновлення
-                    UpdateInfoWidget(
-                      margin: EdgeInsets.only(
-                        left: 16,
-                        right: 16,
-                        bottom: 16,
-                      ),
-                    ),
-                    
-                    // Список записів або порожній стан
-                    _filteredSessions.isEmpty
-                        ? Container(
-                            height: 400,
-                            child: _buildEmptyState(),
-                          )
-                        : Column(
-                            children: List.generate(
-                              _filteredSessions.length,
-                              (index) {
-                                final session = _filteredSessions[index];
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                  child: _buildSessionCard(session),
-                                );
-                              },
-                            ),
+                              SizedBox(height: 12),
+
+                              // Індикатор активного фільтра дати
+                              if (_selectedDate != null)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  margin: EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.amber.shade200,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        size: 16,
+                                        color: Colors.amber.shade700,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Consumer<LanguageProvider>(
+                                        builder: (context, language, child) {
+                                          return Text(
+                                            '${language.getText('Фільтр', 'Фильтр')}: ${_formatDateDisplay(_selectedDate!)}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.amber.shade800,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _clearDateFilter,
+                                        child: Icon(
+                                          Icons.close,
+                                          size: 16,
+                                          color: Colors.amber.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              _buildStatsRow(),
+                            ],
                           ),
-                  ],
+                        ),
+
+                        // Інформація про останнє оновлення
+                        UpdateInfoWidget(
+                          margin: EdgeInsets.only(
+                            left: 16,
+                            right: 16,
+                            bottom: 16,
+                          ),
+                        ),
+
+                        // Список записів або порожній стан
+                        _filteredSessions.isEmpty
+                            ? Container(height: 400, child: _buildEmptyState())
+                            : Column(
+                                children: List.generate(
+                                  _filteredSessions.length,
+                                  (index) {
+                                    final session = _filteredSessions[index];
+                                    return Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 4,
+                                      ),
+                                      child: _buildSessionCard(session),
+                                    );
+                                  },
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-      ),
+        ),
       ),
     );
   }
-  
+
   Widget _buildMasterFilter() {
     List<String> masterOptions = ['Всі майстрині'];
     masterOptions.addAll(_masters.map((m) => m.id!));
-    
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
@@ -467,14 +545,20 @@ class _ArchivePageState extends State<ArchivePage> {
         value: _selectedMasterFilter,
         isExpanded: true,
         decoration: InputDecoration(
-          labelText: Provider.of<LanguageProvider>(context, listen: false).getText('Майстриня', 'Мастерица'),
+          labelText: Provider.of<LanguageProvider>(
+            context,
+            listen: false,
+          ).getText('Майстриня', 'Мастерица'),
           prefixIcon: Icon(Icons.person_outline),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         ),
         items: masterOptions.map((masterId) {
-          final language = Provider.of<LanguageProvider>(context, listen: false);
-          String displayName = masterId == 'Всі майстрині' 
+          final language = Provider.of<LanguageProvider>(
+            context,
+            listen: false,
+          );
+          String displayName = masterId == 'Всі майстрині'
               ? language.getText('Всі майстрині', 'Все мастерицы')
               : _getMasterName(masterId, language.currentLocale.languageCode);
           return DropdownMenuItem(
@@ -495,7 +579,7 @@ class _ArchivePageState extends State<ArchivePage> {
       ),
     );
   }
-  
+
   Widget _buildStatusFilter() {
     return Container(
       decoration: BoxDecoration(
@@ -507,7 +591,10 @@ class _ArchivePageState extends State<ArchivePage> {
         value: _selectedStatusFilter,
         isExpanded: true,
         decoration: InputDecoration(
-          labelText: Provider.of<LanguageProvider>(context, listen: false).getText('Статус', 'Статус'),
+          labelText: Provider.of<LanguageProvider>(
+            context,
+            listen: false,
+          ).getText('Статус', 'Статус'),
           prefixIcon: Icon(Icons.assignment_outlined),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -540,7 +627,11 @@ class _ArchivePageState extends State<ArchivePage> {
               builder: (context, language, child) {
                 return Row(
                   children: [
-                    Icon(Icons.schedule, color: Colors.orange.shade600, size: 20),
+                    Icon(
+                      Icons.schedule,
+                      color: Colors.orange.shade600,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -561,7 +652,11 @@ class _ArchivePageState extends State<ArchivePage> {
               builder: (context, language, child) {
                 return Row(
                   children: [
-                    Icon(Icons.check_circle_outline, color: Colors.green.shade600, size: 20),
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.green.shade600,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -582,7 +677,11 @@ class _ArchivePageState extends State<ArchivePage> {
               builder: (context, language, child) {
                 return Row(
                   children: [
-                    Icon(Icons.cancel_outlined, color: Colors.red.shade600, size: 20),
+                    Icon(
+                      Icons.cancel_outlined,
+                      color: Colors.red.shade600,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -607,29 +706,48 @@ class _ArchivePageState extends State<ArchivePage> {
       ),
     );
   }
-  
 
   Widget _buildStatsRow() {
     int total = _filteredSessions.length;
-    int successful = _filteredSessions.where((s) => s.status == 'успішно').length;
-    int pending = _filteredSessions.where((s) => s.status == 'в очікуванні').length;
+    int successful = _filteredSessions
+        .where((s) => s.status == 'успішно')
+        .length;
+    int pending = _filteredSessions
+        .where((s) => s.status == 'в очікуванні')
+        .length;
     int missed = _filteredSessions.where((s) => s.status == 'пропущено').length;
-    
+
     return Consumer<LanguageProvider>(
       builder: (context, language, child) {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildStatChip(language.getText('Всього', 'Всего'), total, Colors.blue),
-            _buildStatChip(language.getText('Успішно', 'Успешно'), successful, Colors.green),
-            _buildStatChip(language.getText('Очікують', 'Ожидают'), pending, Colors.orange),
-            _buildStatChip(language.getText('Пропущено', 'Пропущено'), missed, Colors.red),
+            _buildStatChip(
+              language.getText('Всього', 'Всего'),
+              total,
+              Colors.blue,
+            ),
+            _buildStatChip(
+              language.getText('Успішно', 'Успешно'),
+              successful,
+              Colors.green,
+            ),
+            _buildStatChip(
+              language.getText('Очікують', 'Ожидают'),
+              pending,
+              Colors.orange,
+            ),
+            _buildStatChip(
+              language.getText('Пропущено', 'Пропущено'),
+              missed,
+              Colors.red,
+            ),
           ],
         );
       },
     );
   }
-  
+
   Widget _buildStatChip(String label, int count, Color color) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -649,36 +767,29 @@ class _ArchivePageState extends State<ArchivePage> {
               color: color,
             ),
           ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );
   }
-  
+
   Widget _buildEmptyState() {
     return SafeArea(
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.archive_outlined,
-              size: 64,
-              color: Colors.grey.shade400,
-            ),
+            Icon(Icons.archive_outlined, size: 64, color: Colors.grey.shade400),
             SizedBox(height: 16),
             Consumer<LanguageProvider>(
               builder: (context, language, child) {
                 return Column(
                   children: [
                     Text(
-                      language.getText('Записи не знайдені', 'Записи не найдены'),
+                      language.getText(
+                        'Записи не знайдені',
+                        'Записи не найдены',
+                      ),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -687,7 +798,10 @@ class _ArchivePageState extends State<ArchivePage> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      language.getText('Спробуйте змінити фільтри', 'Попробуйте изменить фильтры'),
+                      language.getText(
+                        'Спробуйте змінити фільтри',
+                        'Попробуйте изменить фильтры',
+                      ),
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade500,
@@ -702,7 +816,7 @@ class _ArchivePageState extends State<ArchivePage> {
       ),
     );
   }
-  
+
   Widget _buildSessionCard(Session session) {
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -742,9 +856,9 @@ class _ArchivePageState extends State<ArchivePage> {
                     _buildStatusChip(session.status),
                   ],
                 ),
-                
+
                 SizedBox(height: 12),
-                
+
                 // Основна інформація (з відступом справа для кнопок)
                 Padding(
                   padding: EdgeInsets.only(right: 100), // Простір для кнопок
@@ -766,17 +880,27 @@ class _ArchivePageState extends State<ArchivePage> {
                           if (session.isRegularClient) ...[
                             SizedBox(width: 8),
                             Container(
-                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                                  colors: [
+                                    Color(0xFFFFD700),
+                                    Color(0xFFFFA500),
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.diamond, color: Colors.white, size: 12),
+                                  Icon(
+                                    Icons.diamond,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
                                   SizedBox(width: 2),
                                   Text(
                                     'VIP',
@@ -792,9 +916,9 @@ class _ArchivePageState extends State<ArchivePage> {
                           ],
                         ],
                       ),
-                      
+
                       SizedBox(height: 4),
-                      
+
                       // Майстер
                       Consumer<LanguageProvider>(
                         builder: (context, language, child) {
@@ -807,9 +931,9 @@ class _ArchivePageState extends State<ArchivePage> {
                           );
                         },
                       ),
-                      
+
                       SizedBox(height: 2),
-                      
+
                       // Час та тривалість
                       Consumer<LanguageProvider>(
                         builder: (context, language, child) {
@@ -822,9 +946,9 @@ class _ArchivePageState extends State<ArchivePage> {
                           );
                         },
                       ),
-                      
+
                       SizedBox(height: 2),
-                      
+
                       // Послуга
                       Consumer<LanguageProvider>(
                         builder: (context, language, child) {
@@ -838,7 +962,7 @@ class _ArchivePageState extends State<ArchivePage> {
                           );
                         },
                       ),
-                      
+
                       // Ціна
                       if (session.price != null) ...[
                         SizedBox(height: 2),
@@ -855,14 +979,17 @@ class _ArchivePageState extends State<ArchivePage> {
                           },
                         ),
                       ],
-                      
+
                       // Примітки (якщо є)
-                      if (session.notes != null && session.notes!.isNotEmpty) ...[
+                      if (session.notes != null &&
+                          session.notes!.isNotEmpty) ...[
                         SizedBox(height: 8),
                         Container(
                           padding: EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant.withValues(alpha: 0.5),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceVariant.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -881,7 +1008,7 @@ class _ArchivePageState extends State<ArchivePage> {
               ],
             ),
           ),
-          
+
           // Кнопка телефону під статусом
           if (session.phone != null && session.phone!.isNotEmpty)
             Positioned(
@@ -889,20 +1016,16 @@ class _ArchivePageState extends State<ArchivePage> {
               right: 56, // Зліва від WhatsApp
               child: IconButton(
                 onPressed: () => _makePhoneCall(session.phone!),
-                icon: Icon(
-                  Icons.phone,
-                  color: Colors.blue[600],
-                  size: 28,
-                ),
-                tooltip: Provider.of<LanguageProvider>(context, listen: false).getText('Подзвонити', 'Позвонить'),
+                icon: Icon(Icons.phone, color: Colors.blue[600], size: 28),
+                tooltip: Provider.of<LanguageProvider>(
+                  context,
+                  listen: false,
+                ).getText('Подзвонити', 'Позвонить'),
                 padding: EdgeInsets.all(4),
-                constraints: BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
+                constraints: BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ),
-          
+
           // WhatsApp кнопка під статусом
           if (session.phone != null && session.phone!.isNotEmpty)
             Positioned(
@@ -915,15 +1038,15 @@ class _ArchivePageState extends State<ArchivePage> {
                   color: Color(0xFF25D366), // Офіційний колір WhatsApp
                   size: 28,
                 ),
-                tooltip: Provider.of<LanguageProvider>(context, listen: false).getText('Написати в WhatsApp', 'Написать в WhatsApp'),
+                tooltip: Provider.of<LanguageProvider>(
+                  context,
+                  listen: false,
+                ).getText('Написати в WhatsApp', 'Написать в WhatsApp'),
                 padding: EdgeInsets.all(4),
-                constraints: BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
+                constraints: BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ),
-          
+
           // Кнопка редагування справа знизу
           Positioned(
             bottom: 8,
@@ -935,24 +1058,24 @@ class _ArchivePageState extends State<ArchivePage> {
                 color: Theme.of(context).colorScheme.primary,
                 size: 26,
               ),
-              tooltip: Provider.of<LanguageProvider>(context, listen: false).getText('Редагувати запис', 'Редактировать запись'),
+              tooltip: Provider.of<LanguageProvider>(
+                context,
+                listen: false,
+              ).getText('Редагувати запис', 'Редактировать запись'),
               padding: EdgeInsets.all(4),
-              constraints: BoxConstraints(
-                minWidth: 32,
-                minHeight: 32,
-              ),
+              constraints: BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ),
         ],
       ),
     );
   }
-  
+
   Widget _buildStatusChip(String status) {
     Color backgroundColor;
     Color textColor;
     IconData icon;
-    
+
     switch (status) {
       case 'успішно':
         backgroundColor = Colors.green.shade50;
@@ -971,7 +1094,7 @@ class _ArchivePageState extends State<ArchivePage> {
         icon = Icons.schedule;
         break;
     }
-    
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -996,7 +1119,7 @@ class _ArchivePageState extends State<ArchivePage> {
       ),
     );
   }
-  
+
   String _getStatusText(String status) {
     final language = Provider.of<LanguageProvider>(context, listen: false);
     switch (status) {
@@ -1009,7 +1132,7 @@ class _ArchivePageState extends State<ArchivePage> {
         return language.getText('В очікуванні', 'В ожидании');
     }
   }
-  
+
   String _formatDate(String dateString) {
     try {
       final date = DateTime.parse(dateString);
@@ -1020,36 +1143,39 @@ class _ArchivePageState extends State<ArchivePage> {
       return dateString;
     }
   }
-  
+
   void _makePhoneCall(String phoneNumber) async {
     final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(phoneUri)) {
       await launchUrl(phoneUri);
     }
   }
-  
+
   void _openWhatsApp(String phoneNumber) async {
     // Прибираємо всі символи крім цифр та +
     String cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
     final Uri whatsappUri = Uri.parse('https://wa.me/$cleanNumber');
-    
+
     if (await canLaunchUrl(whatsappUri)) {
       await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
     }
   }
-  
+
   void _editSession(Session session) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SessionEditPage(session: session),
       ),
-    );    if (result == true) {
+    );
+
+    if (result == true) {
       // Інвалідуємо кеш в глобальному провайдері
       final appState = Provider.of<AppStateProvider>(context, listen: false);
       appState.invalidateCache();
-      
-      _loadData(); // Перезавантажуємо дані після редагування
+
+      // Примусово перезавантажуємо дані з бази даних
+      await _forceReloadData();
     }
   }
 }

@@ -3,28 +3,12 @@ class Master {
   final String name; // Ім'я українською (за замовчуванням)
   final String? nameRu; // Ім'я російською
   final String status;
-  final String? specialization;
-  final String? specializationRu; // Спеціалізація російською
 
-  Master({
-    this.id,
-    required this.name,
-    this.nameRu,
-    required this.status,
-    this.specialization,
-    this.specializationRu,
-  });
+  Master({this.id, required this.name, this.nameRu, required this.status});
 
   // Для SQLite (залишимо для сумісності, але не використовуємо)
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'nameRu': nameRu,
-      'status': status,
-      'specialization': specialization,
-      'specializationRu': specializationRu,
-    };
+    return {'id': id, 'name': name, 'nameRu': nameRu, 'status': status};
   }
 
   factory Master.fromMap(Map<String, dynamic> map) {
@@ -33,20 +17,12 @@ class Master {
       name: map['name'] ?? '',
       nameRu: map['nameRu'],
       status: map['status'] ?? 'available',
-      specialization: map['specialization'],
-      specializationRu: map['specializationRu'],
     );
   }
 
   // Для Firestore
   Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'nameRu': nameRu,
-      'status': status,
-      'specialization': specialization,
-      'specializationRu': specializationRu,
-    };
+    return {'name': name, 'nameRu': nameRu, 'status': status};
   }
 
   factory Master.fromFirestore(Map<String, dynamic> data) {
@@ -55,8 +31,6 @@ class Master {
       name: data['name'] ?? '',
       nameRu: data['nameRu'],
       status: data['status'] ?? 'available',
-      specialization: data['specialization'],
-      specializationRu: data['specializationRu'],
     );
   }
 
@@ -66,13 +40,6 @@ class Master {
       return nameRu!;
     }
     return name;
-  }
-
-  String? getLocalizedSpecialization(String languageCode) {
-    if (languageCode == 'ru' && specializationRu != null && specializationRu!.isNotEmpty) {
-      return specializationRu!;
-    }
-    return specialization;
   }
 }
 

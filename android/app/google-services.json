@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "1006914970725",
-    "project_id": "manicure-salon-334ba",
-    "storage_bucket": "manicure-salon-334ba.firebasestorage.app"
+    "project_number": "760861241087",
+    "project_id": "manicure-salon-ba7ad",
+    "storage_bucket": "manicure-salon-ba7ad.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1006914970725:android:6d799431ca0f825c06128c",
+        "mobilesdk_app_id": "1:760861241087:android:1ce3183d71431263c3a6ca",
         "android_client_info": {
-          "package_name": "com.nastya.salon"
+          "package_name": "com.nastyaApp.ManicureSalon"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCcIfM5JA435wetzx3br3VrFpuQEX2KVWY"
+          "current_key": "AIzaSyDcPnmqruzobZAFpCwXwiWHrnD0unTdJSM"
         }
       ],
       "services": {

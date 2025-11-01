@@ -1,4 +1,4 @@
-package com.nastya.salon
+package com.nastyaApp.ManicureSalon
 
 import io.flutter.embedding.android.FlutterActivity
 

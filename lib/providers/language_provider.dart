@@ -18,7 +18,7 @@ class LanguageProvider extends ChangeNotifier {
   Future<void> changeLanguage(String languageCode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('app_language', languageCode);
-    
+
     _currentLocale = Locale(languageCode);
     notifyListeners();
   }

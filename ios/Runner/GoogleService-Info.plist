@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyDPXBr5xKOxFNm1OV91pkJQHzuVmeS-QB8</string>
+	<string>AIzaSyDcPnmqruzobZAFpCwXwiWHrnD0unTdJSM</string>
 	<key>GCM_SENDER_ID</key>
-	<string>1006914970725</string>
+	<string>760861241087</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.nastya.salon</string>
+	<string>com.nastyaApp.ManicureSalon</string>
 	<key>PROJECT_ID</key>
-	<string>manicure-salon-334ba</string>
+	<string>manicure-salon-ba7ad</string>
 	<key>STORAGE_BUCKET</key>
-	<string>manicure-salon-334ba.firebasestorage.app</string>
+	<string>manicure-salon-ba7ad.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>

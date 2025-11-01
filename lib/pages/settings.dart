@@ -18,6 +18,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Map<String, bool> _masterNotifications = {}; // id майстра -> включені сповіщення
   bool _isLoading = true;
   bool _hasChanges = false;
+  
+  // Початкові значення для порівняння
+  String _initialLanguage = 'uk';
+  Map<String, bool> _initialMasterNotifications = {};
 
   @override
   void initState() {
@@ -34,6 +38,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // Спочатку завантажуємо тільки мову з SharedPreferences
       final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
       _selectedLanguage = languageProvider.currentLocale.languageCode;
+      _initialLanguage = _selectedLanguage; // Зберігаємо початкове значення
       
       // Потім окремо завантажуємо майстрів з Firebase
       final appState = Provider.of<AppStateProvider>(context, listen: false);
@@ -44,13 +49,17 @@ class _SettingsPageState extends State<SettingsPage> {
       // І тільки потім завантажуємо налаштування сповіщень
       final prefs = await SharedPreferences.getInstance();
       _masterNotifications.clear();
+      _initialMasterNotifications.clear();
       for (final master in appState.masters) {
         final key = 'notifications_${master.id}';
-        _masterNotifications[master.id!] = prefs.getBool(key) ?? true;
+        final value = prefs.getBool(key) ?? true;
+        _masterNotifications[master.id!] = value;
+        _initialMasterNotifications[master.id!] = value; // Зберігаємо початкове значення
       }
       
       setState(() {
         _isLoading = false;
+        _updateHasChanges(); // Перевіряємо чи є зміни після завантаження
       });
       
     } catch (e) {
@@ -91,6 +100,9 @@ class _SettingsPageState extends State<SettingsPage> {
     
     setState(() {
       _hasChanges = false;
+      // Оновлюємо початкові значення після збереження
+      _initialLanguage = _selectedLanguage;
+      _initialMasterNotifications = Map.from(_masterNotifications);
     });
     
     // Показуємо повідомлення про успішне збереження
@@ -121,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (newLanguage != null && newLanguage != _selectedLanguage) {
       setState(() {
         _selectedLanguage = newLanguage;
-        _hasChanges = true;
+        _updateHasChanges();
       });
     }
   }
@@ -129,8 +141,42 @@ class _SettingsPageState extends State<SettingsPage> {
   void _onNotificationChanged(String masterId, bool value) {
     setState(() {
       _masterNotifications[masterId] = value;
-      _hasChanges = true;
+      _updateHasChanges();
     });
+  }
+
+  /// Перевіряє чи є реальні зміни відносно початкових значень
+  void _updateHasChanges() {
+    bool hasRealChanges = false;
+    
+    // Перевіряємо зміну мови
+    if (_selectedLanguage != _initialLanguage) {
+      hasRealChanges = true;
+    }
+    
+    // Перевіряємо зміни в налаштуваннях сповіщень
+    if (!hasRealChanges) {
+      for (final entry in _masterNotifications.entries) {
+        final initialValue = _initialMasterNotifications[entry.key] ?? true;
+        if (entry.value != initialValue) {
+          hasRealChanges = true;
+          break;
+        }
+      }
+      
+      // Додатково перевіряємо чи є нові майстри в поточних налаштуваннях
+      // яких не було в початкових (на випадок динамічного додавання майстрів)
+      if (!hasRealChanges) {
+        for (final entry in _initialMasterNotifications.entries) {
+          if (!_masterNotifications.containsKey(entry.key)) {
+            hasRealChanges = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    _hasChanges = hasRealChanges;
   }
 
   @override
@@ -207,27 +253,15 @@ class _SettingsPageState extends State<SettingsPage> {
                           // Розділ мови
                           _buildLanguageSection(),
                           
-                          SizedBox(height: 32),
+                          SizedBox(height: 25),
                           
                           // Розділ сповіщень
                           _buildNotificationsSection(),
                           
-          SizedBox(height: 32),
-          
-          // Кнопка тестування сповіщень
-          _buildTestNotificationButton(),
-          
-          SizedBox(height: 16),
-          
-          // Кнопка перегляду запланованих сповіщень
-          _buildCheckScheduledButton(),
-          
-          SizedBox(height: 24),
+          SizedBox(height: 25),
           
           // Кнопка збереження
-          _buildSaveButton(),                          SizedBox(height: 16),
-                          
-                          SizedBox(height: 20),
+          _buildSaveButton(),
                         ],
                       ),
                     ),
@@ -355,20 +389,37 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.notifications,
-                color: Theme.of(context).colorScheme.primary,
-                size: 24,
+              Expanded(
+                child: Consumer<LanguageProvider>(
+                  builder: (context, language, child) {
+                    return Text(
+                      language.getText('Сповіщення про записи', 'Уведомления о записях'),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    );
+                  },
+                ),
               ),
-              SizedBox(width: 12),
+              // Кнопка тестування сповіщень (іконка)
               Consumer<LanguageProvider>(
                 builder: (context, language, child) {
-                  return Text(
-                    language.getText('Сповіщення про записи', 'Уведомления о записях'),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
+                  return IconButton(
+                    onPressed: _testNotification,
+                    icon: Icon(
+                      Icons.notifications_active,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 35,
+                    ),
+                    tooltip: language.getText('Тест сповіщень', 'Тест уведомлений'),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: EdgeInsets.all(8),
                     ),
                   );
                 },
@@ -454,14 +505,6 @@ class _SettingsPageState extends State<SettingsPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            if (master.specialization != null)
-                              Text(
-                                master.specialization!,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
-                              ),
                           ],
                         ),
                       ),
@@ -477,35 +520,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildTestNotificationButton() {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: _testNotification,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          foregroundColor: Theme.of(context).colorScheme.onSecondary,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        icon: Icon(Icons.notifications_active, size: 24),
-        label: Consumer<LanguageProvider>(
-          builder: (context, language, child) {
-            return Text(
-              language.getText('Тестувати сповіщення', 'Тестировать уведомления'),
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   Future<void> _testNotification() async {
     final language = Provider.of<LanguageProvider>(context, listen: false);
@@ -557,7 +571,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
+          duration: Duration(seconds: 2),
         ),
       );
     } catch (e) {
@@ -595,97 +609,7 @@ class _SettingsPageState extends State<SettingsPage> {
     print('✅ Простий тест відправлено');
   }
 
-  Widget _buildCheckScheduledButton() {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: _checkScheduledNotifications,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.tertiary,
-          foregroundColor: Theme.of(context).colorScheme.onTertiary,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        icon: Icon(Icons.schedule, size: 24),
-        label: Consumer<LanguageProvider>(
-          builder: (context, language, child) {
-            return Text(
-              language.getText('Перевірити заплановані', 'Проверить запланированные'),
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
 
-  Future<void> _checkScheduledNotifications() async {
-    final language = Provider.of<LanguageProvider>(context, listen: false);
-    
-    try {
-      print('🔍 Починаємо перевірку запланованих сповіщень...');
-      
-      final notificationService = NotificationService();
-      
-      // Перевіряємо ініціалізацію
-      await notificationService.initialize();
-      
-      // Отримуємо заплановані сповіщення
-      final pendingNotifications = await notificationService.getPendingNotifications();
-      
-      print('📋 Знайдено ${pendingNotifications.length} запланованих сповіщень:');
-      
-      if (pendingNotifications.isEmpty) {
-        print('⚠️ Запланованих сповіщень немає. Можливі причини:');
-        print('  1. Сповіщення не були заплановані');
-        print('  2. Час сповіщення вже минув');
-        print('  3. Проблеми з часовими зонами');
-        print('  4. Дозволи на сповіщення не надані');
-        
-        // Перевіряємо дозволи
-        final permissionsEnabled = await notificationService.areNotificationsEnabled();
-        print('🔒 Дозволи на сповіщення: $permissionsEnabled');
-      } else {
-        for (int i = 0; i < pendingNotifications.length; i++) {
-          final notification = pendingNotifications[i];
-          print('  ${i + 1}. ID: ${notification.id}');
-          print('     Title: ${notification.title}');
-          print('     Body: ${notification.body}');
-          print('     Payload: ${notification.payload}');
-          print('     ----');
-        }
-      }
-      
-      // Показуємо результат користувачу
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            language.getText(
-              'Знайдено ${pendingNotifications.length} запланованих сповіщень.\n${pendingNotifications.isEmpty ? "Створіть запис мінімум за 30 хв для тестування." : "Деталі в консолі."}',
-              'Найдено ${pendingNotifications.length} запланированных уведомлений.\n${pendingNotifications.isEmpty ? "Создайте запись минимум за 30 мин для тестирования." : "Детали в консоли."}'
-            ),
-          ),
-          backgroundColor: pendingNotifications.isEmpty ? Colors.orange : Theme.of(context).colorScheme.tertiary,
-          duration: Duration(seconds: 6),
-        ),
-      );
-    } catch (e) {
-      print('❌ Помилка перевірки запланованих сповіщень: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Помилка перевірки: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-        ),
-      );
-    }
-  }
 
   Widget _buildSaveButton() {
     return SizedBox(

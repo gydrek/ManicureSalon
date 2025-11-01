@@ -7,11 +7,8 @@ import 'package:nastya_app/providers/language_provider.dart';
 /// Показує час останнього оновлення та кнопку для ручного оновлення
 class UpdateInfoWidget extends StatelessWidget {
   final EdgeInsets? margin;
-  
-  const UpdateInfoWidget({
-    super.key,
-    this.margin,
-  });
+
+  const UpdateInfoWidget({super.key, this.margin});
 
   @override
   Widget build(BuildContext context) {
@@ -29,15 +26,21 @@ class UpdateInfoWidget extends StatelessWidget {
             ),
             border: Border(
               bottom: BorderSide(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.2),
                 width: 2,
               ),
               right: BorderSide(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.2),
                 width: 2,
               ),
               left: BorderSide(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.2),
                 width: 2,
               ),
             ),
@@ -47,7 +50,9 @@ class UpdateInfoWidget extends StatelessWidget {
               Container(
                 padding: EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -64,11 +69,16 @@ class UpdateInfoWidget extends StatelessWidget {
                     Consumer<LanguageProvider>(
                       builder: (context, languageProvider, child) {
                         return Text(
-                          languageProvider.getText('Оновлено: ${_formatTime(appState.lastUpdate)}', 'Обновлено: ${_formatTime(appState.lastUpdate)}'),
+                          languageProvider.getText(
+                            'Оновлено: ${_formatTime(appState.lastUpdate)}',
+                            'Обновлено: ${_formatTime(appState.lastUpdate)}',
+                          ),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         );
                       },
@@ -77,10 +87,16 @@ class UpdateInfoWidget extends StatelessWidget {
                     Consumer<LanguageProvider>(
                       builder: (context, languageProvider, child) {
                         return Text(
-                          languageProvider.getText('Автооновлення: 5 хв', 'Автообновление: 5 мин'),
+                          languageProvider.getText(
+                            'Автооновлення: 5 хв',
+                            'Автообновление: 5 мин',
+                          ),
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.7),
                           ),
                         );
                       },
@@ -91,43 +107,44 @@ class UpdateInfoWidget extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: appState.isLoading 
-                    ? Colors.grey.withValues(alpha: 0.1)
-                    : Colors.blue.withValues(alpha: 0.1),
+                  color: appState.isLoading
+                      ? Colors.grey.withValues(alpha: 0.1)
+                      : Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: appState.isLoading 
-                      ? Colors.grey.withValues(alpha: 0.3)
-                      : Colors.blue.withValues(alpha: 0.3),
+                    color: appState.isLoading
+                        ? Colors.grey.withValues(alpha: 0.3)
+                        : Colors.blue.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    appState.isLoading 
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.grey,
-                          ),
-                        )
-                      : Icon(
-                          Icons.swipe_down,
-                          color: Colors.blue,
-                          size: 18,
-                        ),
+                    appState.isLoading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.grey,
+                            ),
+                          )
+                        : Icon(Icons.swipe_down, color: Colors.blue, size: 18),
                     SizedBox(width: 4),
                     Consumer<LanguageProvider>(
                       builder: (context, languageProvider, child) {
                         return Text(
-                          languageProvider.getText(appState.isLoading ? 'Оновлення...' : 'Свайп ↓', appState.isLoading ? 'Обновление...' : 'Свайп ↓'),
+                          languageProvider.getText(
+                            appState.isLoading ? 'Оновлення...' : 'Свайп ↓',
+                            appState.isLoading ? 'Обновление...' : 'Свайп ↓',
+                          ),
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: appState.isLoading ? Colors.grey : Colors.blue,
+                            color: appState.isLoading
+                                ? Colors.grey
+                                : Colors.blue,
                           ),
                         );
                       },
