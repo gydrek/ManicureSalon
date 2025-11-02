@@ -227,41 +227,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                     // Інформація про застосунок, можна розкоментувати за потреби
 
-                    // ListTile(
-                    //   leading: Icon(Icons.info_outline),
-                    //   title: Consumer<LanguageProvider>(
-                    //     builder: (context, language, child) {
-                    //       return Text(language.getText('Про застосунок', 'О приложении'));
-                    //     },
-                    //   ),
-                    //   onTap: () {
-                    //     Navigator.pop(context);
-                    //     showDialog(
-                    //       context: context,
-                    //       builder: (context) => AlertDialog(
-                    //         title: Consumer<LanguageProvider>(
-                    //           builder: (context, language, child) {
-                    //             return Text(language.getText('Про застосунок', 'О приложении'));
-                    //           },
-                    //         ),
-                    //         content: Consumer<LanguageProvider>(
-                    //           builder: (context, language, child) {
-                    //             return Text(language.getText(
-                    //               'Salon App v1.0\n\nЗастосунок для управління записами в салоні краси.',
-                    //               'Salon App v1.0\n\nПриложение для управления записями в салоне красоты.',
-                    //             ));
-                    //           },
-                    //         ),
-                    //         actions: [
-                    //           TextButton(
-                    //             onPressed: () => Navigator.pop(context),
-                    //             child: Text('OK'),
-                    //           ),
-                    //         ],
-                    //       ),
-                    //     );
-                    //   },
-                    // ),
+                    ListTile(
+                      leading: Icon(Icons.info_outline),
+                      title: Consumer<LanguageProvider>(
+                        builder: (context, language, child) {
+                          return Text(language.getText('Про застосунок', 'О приложении'));
+                        },
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Consumer<LanguageProvider>(
+                              builder: (context, language, child) {
+                                return Text(language.getText('Про застосунок', 'О приложении'));
+                              },
+                            ),
+                            content: Consumer<LanguageProvider>(
+                              builder: (context, language, child) {
+                                return Text(language.getText(
+                                  'Nogotochki (beta) v1.1.0 (build 2)',
+                                  'Nogotochki (beta) v1.1.0 (build 2)',
+                                ));
+                              },
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text('OK'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -785,8 +785,6 @@ class MasterCard extends StatelessWidget {
                             builder: (context, language, child) {
                               final status = sessionInfo['status'] ?? 'none';
                               final displayText = sessionInfo['displayText'];
-                              final noSessionsType =
-                                  sessionInfo['noSessionsType'];
 
                               String finalText;
                               if (status == 'current') {
@@ -800,18 +798,11 @@ class MasterCard extends StatelessWidget {
                                   'Следующий сеанс: $displayText',
                                 );
                               } else {
-                                // Обробляємо різні типи відсутності записів
-                                if (noSessionsType == 'no_future') {
-                                  finalText = language.getText(
-                                    'Немає майбутніх записів',
-                                    'Нет будущих записей',
-                                  );
-                                } else {
-                                  finalText = language.getText(
-                                    'Немає будь-яких записів',
-                                    'Нет каких-либо записей',
-                                  );
-                                }
+                                // Для всіх випадків відсутності записів показуємо один текст
+                                finalText = language.getText(
+                                  'Немає записів на поточний місяць + 2 наступних',
+                                  'Нет записей на текущий месяц + 2 следующих',
+                                );
                               }
 
                               return Text(

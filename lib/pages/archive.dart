@@ -26,7 +26,7 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
 
   String _selectedMasterFilter = 'Всі майстрині';
   String _selectedStatusFilter = 'Всі статуси';
-  DateTime? _selectedDate;
+  DateTime _selectedMonth = DateTime.now(); // Замінюємо _selectedDate на _selectedMonth
   bool _isLoading = true;
 
   String _getLocalizedService(String service, LanguageProvider language) {
@@ -110,80 +110,74 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
     });
 
     try {
-      // Спочатку намагаємося використати дані з AppStateProvider
+      print('🔄 Завантажуємо дані архіву за ${_selectedMonth.month}/${_selectedMonth.year}');
+      
+      // Завантажуємо майстрів з AppStateProvider або напряму
       final appState = Provider.of<AppStateProvider>(context, listen: false);
-
+      
       if (appState.masters.isNotEmpty) {
-        // Використовуємо кешовані дані з AppStateProvider
-        print('📦 Використовуємо кешовані дані з AppStateProvider');
-        final allSessionsFromProvider = _getAllSessionsFromProvider(appState);
-
-        setState(() {
-          _allSessions = allSessionsFromProvider;
-          _filteredSessions = allSessionsFromProvider;
-          _masters = appState.masters;
-          _isLoading = false;
-        });
+        _masters = appState.masters;
       } else {
-        // Якщо AppStateProvider ще не завантажений, робимо прямі запити
-        print('🔄 AppStateProvider порожній, завантажуємо напряму');
-        final sessions = await _firestoreService.getAllSessions();
-        final masters = await _firestoreService.getMasters();
-
-        setState(() {
-          _allSessions = sessions;
-          _filteredSessions = sessions;
-          _masters = masters;
-          _isLoading = false;
-        });
+        _masters = await _firestoreService.getMasters();
       }
 
+      // Завантажуємо сесії за обраний місяць
+      final sessions = await _firestoreService.getSessionsByMonth(
+        _selectedMonth.year,
+        _selectedMonth.month,
+      );
+
+      setState(() {
+        _allSessions = sessions;
+        _filteredSessions = sessions;
+        _isLoading = false;
+      });
+
       _applyFilters();
+      print('✅ Завантажено ${sessions.length} сесій за ${_selectedMonth.month}/${_selectedMonth.year}');
     } catch (e) {
-      print('Помилка завантаження даних: $e');
+      print('❌ Помилка завантаження даних: $e');
       setState(() {
         _isLoading = false;
       });
     }
   }
 
-  /// Примусово перезавантажити дані з бази даних (без використання кешу)
-  Future<void> _forceReloadData() async {
+  /// Оновити дані тільки за поточний обраний місяць
+  Future<void> _refreshCurrentMonth() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      print('🔄 Примусове перезавантаження даних з БД (очищаємо кеш)...');
+      print('🔄 Оновлюємо дані архіву за ${_selectedMonth.month}/${_selectedMonth.year}...');
 
-      // Використовуємо покращену систему кешування з AppStateProvider
-      final appStateProvider = Provider.of<AppStateProvider>(
-        context,
-        listen: false,
+      // Оновлюємо майстрів з AppStateProvider
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      await appState.refreshAllData(forceRefresh: true);
+      
+      if (appState.masters.isNotEmpty) {
+        _masters = appState.masters;
+      } else {
+        _masters = await _firestoreService.getMasters();
+      }
+
+      // Завантажуємо свіжі дані тільки за обраний місяць
+      final sessions = await _firestoreService.getSessionsByMonth(
+        _selectedMonth.year,
+        _selectedMonth.month,
       );
-
-      // Очищаємо кеш і примусово перезавантажуємо всі дані
-      await appStateProvider.forceReloadData(
-        masters: true,
-        clients: true,
-        sessions: true,
-      );
-
-      // Отримуємо оновлені дані з провайдера
-      final sessions = await _firestoreService.getAllSessions();
-      final masters = await _firestoreService.getMasters();
 
       setState(() {
         _allSessions = sessions;
         _filteredSessions = sessions;
-        _masters = masters;
         _isLoading = false;
       });
 
       _applyFilters();
-      print('✅ Дані примусово перезавантажено з БД');
+      print('✅ Дані архіву за ${_selectedMonth.month}/${_selectedMonth.year} оновлені (${sessions.length} сесій)');
     } catch (e) {
-      print('❌ Помилка примусового завантаження даних: $e');
+      print('❌ Помилка оновлення архіву: $e');
       setState(() {
         _isLoading = false;
       });
@@ -191,25 +185,7 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
   }
 
   // Отримуємо всі сесії з AppStateProvider
-  List<Session> _getAllSessionsFromProvider(AppStateProvider appState) {
-    final allSessions = <Session>[];
 
-    // Збираємо сесії всіх майстрів
-    for (final masterId in appState.sessionsByMaster.keys) {
-      allSessions.addAll(appState.sessionsByMaster[masterId] ?? []);
-    }
-
-    // Сортуємо по даті (найновіші спочатку)
-    allSessions.sort((a, b) {
-      int dateCompare = b.date.compareTo(a.date);
-      if (dateCompare == 0) {
-        return b.time.compareTo(a.time);
-      }
-      return dateCompare;
-    });
-
-    return allSessions;
-  }
 
   void _applyFilters() {
     setState(() {
@@ -224,12 +200,8 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
             _selectedStatusFilter == 'Всі статуси' ||
             session.status == _selectedStatusFilter;
 
-        // Фільтр по даті
-        bool dateMatch =
-            _selectedDate == null ||
-            session.date == _formatDateForComparison(_selectedDate!);
-
-        return masterMatch && statusMatch && dateMatch;
+        // Дата фільтрація не потрібна, оскільки завантажуємо тільки за обраний місяць
+        return masterMatch && statusMatch;
       }).toList();
 
       // Сортуємо по даті (найновіші спочатку)
@@ -243,53 +215,43 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
     });
   }
 
-  String _formatDateForComparison(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
 
-  String _formatDateDisplay(DateTime date) {
+
+
+
+  Future<void> _selectMonth() async {
     final language = Provider.of<LanguageProvider>(context, listen: false);
-    final months = _getLocalizedMonths(language);
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
-  }
 
-  void _showDatePicker() async {
-    final language = Provider.of<LanguageProvider>(context, listen: false);
-    final locale = language.currentLocale.languageCode == 'uk'
-        ? Locale('uk', 'UA')
-        : Locale('ru', 'RU');
-
-    final DateTime? picked = await showDatePicker(
+    final result = await showDialog<DateTime>(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime.now().add(Duration(days: 365)),
-      locale: locale,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      builder: (context) =>
+          _MonthPickerDialog(selectedMonth: _selectedMonth, language: language),
     );
 
-    if (picked != null) {
+    if (result != null) {
       setState(() {
-        _selectedDate = picked;
+        _selectedMonth = result;
       });
-      _applyFilters();
+      // Перезавантажуємо дані для нового місяця
+      await _loadData();
     }
   }
 
-  void _clearDateFilter() {
-    setState(() {
-      _selectedDate = null;
-    });
-    _applyFilters();
+  String _getMonthName(DateTime date, LanguageProvider language) {
+    final ukrainianMonths = [
+      'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
+      'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
+    ];
+    final russianMonths = [
+      'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+    ];
+
+    final monthNames = language.currentLocale.languageCode == 'uk'
+        ? ukrainianMonths
+        : russianMonths;
+
+    return '${monthNames[date.month - 1]} ${date.year}';
   }
 
   String _getMasterName(String masterId, String languageCode) {
@@ -318,24 +280,17 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
           elevation: 0,
           centerTitle: true,
           actions: [
-            GestureDetector(
-              onLongPress: _selectedDate != null ? _clearDateFilter : null,
-              child: Consumer<LanguageProvider>(
-                builder: (context, language, child) {
-                  return IconButton(
-                    icon: Icon(
-                      Icons.calendar_today,
-                      color: _selectedDate != null
-                          ? Colors.amber.shade300
-                          : Theme.of(context).colorScheme.onPrimary,
-                    ),
-                    onPressed: _showDatePicker,
-                    tooltip: _selectedDate != null
-                        ? '${language.getText('Вибрана дата', 'Выбранная дата')}: ${_formatDateDisplay(_selectedDate!)}}'
-                        : language.getText('Вибрати дату', 'Выбрать дату'),
-                  );
-                },
-              ),
+            Consumer<LanguageProvider>(
+              builder: (context, language, child) {
+                return IconButton(
+                  icon: Icon(
+                    Icons.date_range,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  onPressed: _selectMonth,
+                  tooltip: '${language.getText('Місяць', 'Месяц')}: ${_getMonthName(_selectedMonth, language)}',
+                );
+              },
             ),
           ],
         ),
@@ -368,18 +323,12 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
                 )
               : RefreshIndicator(
                   onRefresh: () async {
-                    print('🔄 Оновлення архіву через свайп...');
+                    print('🔄 Оновлення архіву через свайп за ${_selectedMonth.month}/${_selectedMonth.year}...');
 
-                    // Використовуємо примусове перезавантаження для гарантованого оновлення
-                    await _forceReloadData();
+                    // Оновлюємо тільки поточний обраний місяць
+                    await _refreshCurrentMonth();
 
-                    // Також оновлюємо глобальний провайдер
-                    await Provider.of<AppStateProvider>(
-                      context,
-                      listen: false,
-                    ).refreshAllData(forceRefresh: true);
-
-                    print('✅ Архів повністю оновлено');
+                    print('✅ Архів за ${_selectedMonth.month}/${_selectedMonth.year} оновлено');
 
                     // Показуємо повідомлення про успішне оновлення
                     if (context.mounted) {
@@ -441,54 +390,44 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
                               ),
                               SizedBox(height: 12),
 
-                              // Індикатор активного фільтра дати
-                              if (_selectedDate != null)
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  margin: EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade50,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.amber.shade200,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.calendar_today,
-                                        size: 16,
-                                        color: Colors.amber.shade700,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Consumer<LanguageProvider>(
-                                        builder: (context, language, child) {
-                                          return Text(
-                                            '${language.getText('Фільтр', 'Фильтр')}: ${_formatDateDisplay(_selectedDate!)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.amber.shade800,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      SizedBox(width: 8),
-                                      GestureDetector(
-                                        onTap: _clearDateFilter,
-                                        child: Icon(
-                                          Icons.close,
-                                          size: 16,
-                                          color: Colors.amber.shade700,
-                                        ),
-                                      ),
-                                    ],
+                              // Індикатор обраного місяця
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                margin: EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orangeAccent.withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.orangeAccent,
                                   ),
                                 ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.date_range,
+                                      size: 16,
+                                      color: Colors.brown,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Consumer<LanguageProvider>(
+                                      builder: (context, language, child) {
+                                        return Text(
+                                          '${language.getText('Місяць', 'Месяц')}: ${_getMonthName(_selectedMonth, language)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.brown,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
 
                               _buildStatsRow(),
                             ],
@@ -1174,8 +1113,160 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
       final appState = Provider.of<AppStateProvider>(context, listen: false);
       appState.invalidateCache();
 
-      // Примусово перезавантажуємо дані з бази даних
-      await _forceReloadData();
+      // Оновлюємо дані за поточний місяць
+      await _refreshCurrentMonth();
     }
+  }
+}
+
+class _MonthPickerDialog extends StatefulWidget {
+  final DateTime selectedMonth;
+  final LanguageProvider language;
+
+  const _MonthPickerDialog({
+    required this.selectedMonth,
+    required this.language,
+  });
+
+  @override
+  State<_MonthPickerDialog> createState() => _MonthPickerDialogState();
+}
+
+class _MonthPickerDialogState extends State<_MonthPickerDialog> {
+  late int _selectedYear;
+  late int _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.selectedMonth.year;
+    _selectedMonth = widget.selectedMonth.month;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ukrainianMonths = [
+      'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
+      'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
+    ];
+    final russianMonths = [
+      'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+    ];
+
+    final monthNames = widget.language.currentLocale.languageCode == 'uk'
+        ? ukrainianMonths
+        : russianMonths;
+
+    return AlertDialog(
+      title: Text(widget.language.getText('Оберіть місяць', 'Выберите месяц')),
+      content: Container(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Вибір року
+            Row(
+              children: [
+                Text(
+                  widget.language.getText('Рік:', 'Год:'),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButton<int>(
+                    value: _selectedYear,
+                    isExpanded: true,
+                    items: List.generate(10, (index) {
+                      final year = DateTime.now().year - 8 + index;
+                      return DropdownMenuItem(
+                        value: year,
+                        child: Text('$year'),
+                      );
+                    }),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedYear = value!;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            // Вибір місяця
+            Text(
+              widget.language.getText('Місяць:', 'Месяц:'),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            Container(
+              height: 200,
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 2.5,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  final monthIndex = index + 1;
+                  final isSelected = monthIndex == _selectedMonth;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedMonth = monthIndex;
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          monthNames[index],
+                          style: TextStyle(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(context).colorScheme.onSurface,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(widget.language.getText('Скасувати', 'Отменить')),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final selectedDate = DateTime(_selectedYear, _selectedMonth, 1);
+            Navigator.pop(context, selectedDate);
+          },
+          child: Text(widget.language.getText('Вибрати', 'Выбрать')),
+        ),
+      ],
+    );
   }
 }

@@ -972,7 +972,7 @@ class _MonthPickerDialogState extends State<_MonthPickerDialog> {
                     value: _selectedYear,
                     isExpanded: true,
                     items: List.generate(10, (index) {
-                      final year = DateTime.now().year - 5 + index;
+                      final year = DateTime.now().year - 8 + index;
                       return DropdownMenuItem(
                         value: year,
                         child: Text('$year'),

@@ -47,8 +47,8 @@ class DevelopmentFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDcPnmqruzobZAFpCwXwiWHrnD0unTdJSM',
-    appId: '1:760861241087:ios:dummy-replace',
-    messagingSenderId: '760861241087',
+    appId: '1:1006914970725:ios:0a3038dd9da0f58d06128c',
+    messagingSenderId: '1006914970725',
     projectId: 'manicure-salon-ba7ad',
     storageBucket: 'manicure-salon-ba7ad.firebasestorage.app',
     iosBundleId: 'com.nastyaApp.ManicureSalon',

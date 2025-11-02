@@ -222,6 +222,36 @@ class _SessionAddPageState extends State<SessionAddPage> {
     _loadAvailableClients();
   }
 
+  // Метод для отримання шляху до фото майстрині
+  String? _getMasterPhotoPath(String masterName) {
+    print('🔍 Шукаю фото для майстра: "$masterName"');
+    final lowerName = masterName.toLowerCase().trim();
+    print('🔍 Нормалізоване ім\'я: "$lowerName"');
+    
+    // Перевіряємо різні варіанти імен
+    final nameVariations = [
+      lowerName,
+      lowerName.replaceAll(' ', ''),
+      lowerName.split(' ').first, // Перше ім'я
+    ];
+    
+    for (final nameVar in nameVariations) {
+      if (nameVar == 'nastya' || nameVar == 'настя' || nameVar == 'анастасія' || nameVar == 'анастасия') {
+        final path = 'assets/images/masters/nastya.jpg';
+        print('✅ Знайдено фото Насті: $path');
+        return path;
+      }
+      if (nameVar == 'ника' || nameVar == 'ніка' || nameVar == 'вероніка' || nameVar == 'вероника') {
+        final path = 'assets/images/masters/nika.jpg';
+        print('✅ Знайдено фото Ніки: $path');
+        return path;
+      }
+    }
+    
+    print('❌ Фото не знайдено для: "$masterName"');
+    return null;
+  }
+
   @override
   void dispose() {
     _clientNameController.dispose();
@@ -533,18 +563,50 @@ class _SessionAddPageState extends State<SessionAddPage> {
                                 height: 50,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Theme.of(context).colorScheme.primary,
-                                      Theme.of(context).colorScheme.secondary,
-                                    ],
-                                  ),
+                                  gradient: _getMasterPhotoPath(widget.masterName) == null
+                                      ? LinearGradient(
+                                          colors: [
+                                            Theme.of(context).colorScheme.primary,
+                                            Theme.of(context).colorScheme.secondary,
+                                          ],
+                                        )
+                                      : null,
                                 ),
-                                child: Icon(
-                                  Icons.person,
-                                  color: Colors.white,
-                                  size: 25,
-                                ),
+                                child: _getMasterPhotoPath(widget.masterName) != null
+                                    ? ClipOval(
+                                        child: Image.asset(
+                                          _getMasterPhotoPath(widget.masterName)!,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            // Якщо фото не завантажилось, показуємо іконку
+                                            return Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Theme.of(context).colorScheme.primary,
+                                                    Theme.of(context).colorScheme.secondary,
+                                                  ],
+                                                ),
+                                              ),
+                                              child: Icon(
+                                                Icons.person,
+                                                color: Colors.white,
+                                                size: 25,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 25,
+                                      ),
                               ),
                               SizedBox(width: 16),
                               Expanded(

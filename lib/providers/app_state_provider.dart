@@ -228,11 +228,22 @@ class AppStateProvider extends ChangeNotifier {
       }
 
       final now = DateTime.now();
-      print('🔄 Завантажуємо сесії з БД...');
-      final sessions = await _firestoreService.getSessionsByMonth(
-        now.year,
-        now.month,
-      );
+      print('🔄 Завантажуємо сесії з БД (поточний + 2 наступних місяці)...');
+      
+      // Оптимізовано: один запит замість трьох
+      final startDate = DateTime(now.year, now.month, 1); // Початок поточного місяця
+      final endDate = DateTime(now.year, now.month + 3, 1); // Початок 4-го місяця (ексклюзивно)
+      
+      final sessions = await _firestoreService.getSessionsForPeriod(startDate, endDate);
+      print('✅ Завантажено сесій за період: ${sessions.length} (1 запит замість 3)');
+      
+      // Статистика по місяцях для відлагодження
+      final sessionsByMonth = <String, int>{};
+      for (final session in sessions) {
+        final month = session.date.substring(0, 7); // yyyy-mm
+        sessionsByMonth[month] = (sessionsByMonth[month] ?? 0) + 1;
+      }
+      print('📊 Розподіл по місяцях: ${sessionsByMonth.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
 
       // Групуємо сесії по майстрах
       _sessionsByMaster.clear();
@@ -287,17 +298,18 @@ class AppStateProvider extends ChangeNotifier {
     final currentTime =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+    // Оптимізуємо - створюємо текст один раз
+    final noSessionsText = _languageProvider?.getText(
+      'Немає записів на поточний місяць + 2 наступних',
+      'Нет записей на текущий месяц + 2 следующих',
+    ) ?? 'Немає записів на поточний місяць + 2 наступних';
+
     for (final master in _masters) {
       final masterId = master.id!;
       final sessions = _sessionsByMaster[masterId] ?? [];
 
       if (sessions.isEmpty) {
-        _nextSessionsByMaster[masterId] =
-            _languageProvider?.getText(
-              'Немає будь-яких записів',
-              'Нет каких-либо записей',
-            ) ??
-            'Немає будь-яких записів';
+        _nextSessionsByMaster[masterId] = noSessionsText;
         continue;
       }
 
@@ -313,12 +325,7 @@ class AppStateProvider extends ChangeNotifier {
       }).toList();
 
       if (futureSessions.isEmpty) {
-        _nextSessionsByMaster[masterId] =
-            _languageProvider?.getText(
-              'Немає майбутніх записів',
-              'Нет будущих записей',
-            ) ??
-            'Немає майбутніх записів';
+        _nextSessionsByMaster[masterId] = noSessionsText;
       } else {
         final nextSession = futureSessions.first;
         final sessionDate = DateTime.parse(nextSession.date);

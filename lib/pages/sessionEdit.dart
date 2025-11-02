@@ -200,6 +200,36 @@ class _SessionEditPageState extends State<SessionEditPage> {
     }
   }
 
+  // Метод для отримання шляху до фото майстрині
+  String? _getMasterPhotoPath(String masterName) {
+    print('🔍 Шукаю фото для майстра: "$masterName"');
+    final lowerName = masterName.toLowerCase().trim();
+    print('🔍 Нормалізоване ім\'я: "$lowerName"');
+    
+    // Перевіряємо різні варіанти імен
+    final nameVariations = [
+      lowerName,
+      lowerName.replaceAll(' ', ''),
+      lowerName.split(' ').first, // Перше ім'я
+    ];
+    
+    for (final nameVar in nameVariations) {
+      if (nameVar == 'nastya' || nameVar == 'настя' || nameVar == 'анастасія' || nameVar == 'анастасия') {
+        final path = 'assets/images/masters/nastya.jpg';
+        print('✅ Знайдено фото Насті: $path');
+        return path;
+      }
+      if (nameVar == 'ника' || nameVar == 'ніка' || nameVar == 'вероніка' || nameVar == 'вероника') {
+        final path = 'assets/images/masters/nika.jpg';
+        print('✅ Знайдено фото Ніки: $path');
+        return path;
+      }
+    }
+    
+    print('❌ Фото не знайдено для: "$masterName"');
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -851,23 +881,66 @@ class _SessionEditPageState extends State<SessionEditPage> {
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Theme.of(context).colorScheme.primary,
-                                      Theme.of(context).colorScheme.secondary,
-                                    ],
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.edit,
-                                  color: Colors.white,
-                                  size: 25,
-                                ),
+                              Consumer<AppStateProvider>(
+                                builder: (context, appState, child) {
+                                  final master = appState.masters.firstWhere(
+                                    (m) => m.id == _selectedMasterId,
+                                    orElse: () => appState.masters.isNotEmpty
+                                        ? appState.masters.first
+                                        : Master(name: 'Невідомо', status: 'active'),
+                                  );
+                                  
+                                  return Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: _getMasterPhotoPath(master.name) == null
+                                          ? LinearGradient(
+                                              colors: [
+                                                Theme.of(context).colorScheme.primary,
+                                                Theme.of(context).colorScheme.secondary,
+                                              ],
+                                            )
+                                          : null,
+                                    ),
+                                    child: _getMasterPhotoPath(master.name) != null
+                                        ? ClipOval(
+                                            child: Image.asset(
+                                              _getMasterPhotoPath(master.name)!,
+                                              width: 50,
+                                              height: 50,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                // Якщо фото не завантажилось, показуємо іконку
+                                                return Container(
+                                                  width: 50,
+                                                  height: 50,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    gradient: LinearGradient(
+                                                      colors: [
+                                                        Theme.of(context).colorScheme.primary,
+                                                        Theme.of(context).colorScheme.secondary,
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.edit,
+                                                    color: Colors.white,
+                                                    size: 25,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          )
+                                        : Icon(
+                                            Icons.edit,
+                                            color: Colors.white,
+                                            size: 25,
+                                          ),
+                                  );
+                                },
                               ),
                               SizedBox(width: 16),
                               Expanded(

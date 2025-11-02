@@ -966,6 +966,45 @@ class FirestoreService {
     }
   }
 
+  /// Отримати сесії за період (оптимізований для home.dart)
+  Future<List<Session>> getSessionsForPeriod(DateTime startDate, DateTime endDate) async {
+    try {
+      final requestTime = DateTime.now().millisecondsSinceEpoch;
+      final startDateStr = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+      final endDateStr = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+      
+      print('🔍 Завантажуємо сесії за період $startDateStr - $endDateStr (запит #$requestTime)');
+
+      // Один запит замість багатьох
+      final QuerySnapshot snapshot = await _sessionsCollection
+          .where('date', isGreaterThanOrEqualTo: startDateStr)
+          .where('date', isLessThan: endDateStr)
+          .orderBy('date', descending: false) // Сортуємо по зростанню для home.dart
+          .limit(500) // Збільшуємо ліміт для 3-х місяців
+          .get(const GetOptions(source: Source.server));
+
+      print('📊 Знайдено документів за період: ${snapshot.docs.length}');
+
+      final sessions = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return Session.fromFirestore(data);
+      }).toList();
+
+      print('✅ Завантажено за period ${startDateStr}-${endDateStr}: ${sessions.length} сесій (запит #$requestTime)');
+      
+      if (sessions.isNotEmpty) {
+        final recentSessions = sessions.take(3).map((s) => '${s.date} ${s.time} ${s.clientName}').join(', ');
+        print('📋 Перші записи: $recentSessions');
+      }
+
+      return sessions;
+    } catch (e) {
+      print('❌ Помилка отримання сесій за період: $e');
+      return [];
+    }
+  }
+
   /// Отримати сесію за ID
   Future<Session?> getSessionById(String sessionId) async {
     try {

@@ -90,6 +90,28 @@ class _CalendarPageState extends State<CalendarPage> {
     super.dispose();
   }
 
+  /// Отримати шлях до фото майстрині
+  String? _getMasterPhotoPath(String masterName) {
+    // Перетворюємо ім'я майстрині на lowercase для назви файлу
+    final name = masterName.toLowerCase();
+    
+    // Підтримувані формати фотографій
+    final formats = ['jpg', 'jpeg', 'png', 'webp'];
+    
+    // Перевіряємо який формат файлу існує
+    for (final format in formats) {
+      // Спробуємо з найпоширенішими іменами
+      if (name == 'настя' || name == 'nastya' || name == 'анастасія' || name == 'анастасия') {
+        return 'assets/images/masters/nastya.$format';
+      } else if (name == 'ніка' || name == 'ника' || name == 'nika' || name == 'вероніка' || name == 'вероника') {
+        return 'assets/images/masters/nika.$format';
+      }
+    }
+    
+    // Якщо фото не знайдено, повертаємо null
+    return null;
+  }
+
   // Оновлення даних календаря після повернення з інших сторінок
   Future<void> _refreshCalendarData() async {
     // Очищуємо кеш для поточного місяця
@@ -339,18 +361,50 @@ class _CalendarPageState extends State<CalendarPage> {
                         height: 50,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
-                            ],
-                          ),
+                          gradient: _getMasterPhotoPath(widget.masterName) == null
+                              ? LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(context).colorScheme.secondary,
+                                  ],
+                                )
+                              : null,
                         ),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 25,
-                        ),
+                        child: _getMasterPhotoPath(widget.masterName) != null
+                            ? ClipOval(
+                                child: Image.asset(
+                                  _getMasterPhotoPath(widget.masterName)!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    // Якщо фото не завантажилось, показуємо іконку
+                                    return Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Theme.of(context).colorScheme.primary,
+                                            Theme.of(context).colorScheme.secondary,
+                                          ],
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 25,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              )
+                            : Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 25,
+                              ),
                       ),
                       SizedBox(width: 16),
                       Expanded(
