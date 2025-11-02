@@ -37,10 +37,10 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
         return language.getText('Покриття гель-лак (руки)', 'Покрытие гель-лак (руки)');
       case 'Манікюр':
         return language.getText('Манікюр', 'Маникюр');
-      case 'Наращування нігтів (стандарт)':
-        return language.getText('Наращування нігтів (стандарт)', 'Наращивание ногтей (стандарт)');
-      case 'Наращування нігтів (довге)':
-        return language.getText('Наращування нігтів (довге)', 'Наращивание ногтей (длинное)');
+      case 'Нарощування нігтів (стандарт)':
+        return language.getText('Нарощування нігтів (стандарт)', 'Наращивание ногтей (стандарт)');
+      case 'Нарощування нігтів (довге)':
+        return language.getText('Нарощування нігтів (довге)', 'Наращивание ногтей (длинное)');
       case 'Манікюр чоловічий':
         return language.getText('Манікюр чоловічий', 'Маникюр мужской');
       case 'Педикюр класичний':
@@ -49,10 +49,10 @@ class _ArchivePageState extends State<ArchivePage> with WidgetsBindingObserver {
         return language.getText('Педикюр класиний + покриття гель-лак', 'Педикюр классический + покрытие гель-лак');
       case 'Покриття гель-лак (ноги)':
         return language.getText('Покриття гель-лак (ноги)', 'Покрытие гель-лак (ноги)');
-      case 'Наращування вій':
-        return language.getText('Наращування вій', 'Наращивание ресниц');
-      case 'Наращування нижніх вій':
-        return language.getText('Наращування нижніх вій', 'Наращивание нижних ресниц');
+      case 'Нарощування вій':
+        return language.getText('Нарощування вій', 'Наращивание ресниц');
+      case 'Нарощування нижніх вій':
+        return language.getText('Нарощування нижніх вій', 'Наращивание нижних ресниц');
       default:
         return service;
     }
