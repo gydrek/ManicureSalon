@@ -78,6 +78,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
 
   String _selectedService = 'Манікюр класичний';
   TimeOfDay _selectedTime = TimeOfDay.now();
+  String _selectedDate = '';
   int _duration = 60; // хвилини
   bool _isLoading = false;
   bool _isRegularClient = false; // Додаємо стан для галочки "Постійна клієнтка"
@@ -160,6 +161,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
       language.getText('Покриття гель-лак (ноги)', 'Покрытие гель-лак (ноги)'),
       language.getText('Нарощування вій', 'Наращивание ресниц'),
       language.getText('Нарощування нижніх вій', 'Наращивание нижних ресниц'),
+      language.getText('Ремонт', 'Ремонт'),
     ];
   }
 
@@ -176,6 +178,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
     'Покриття гель-лак (ноги)',
     'Нарощування вій',
     'Нарощування нижніх вій',
+    'Ремонт',
   ];
 
   final List<int> _durations = [30, 60, 90, 120, 150, 180]; // хвилини
@@ -254,6 +257,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
     _selectedService = widget.session.service;
     _duration = widget.session.duration;
     _selectedMasterId = widget.session.masterId;
+    _selectedDate = widget.session.date;
     _isRegularClient = widget.session.isRegularClient;
     _selectedStatus = widget.session.status;
 
@@ -496,6 +500,22 @@ class _SessionEditPageState extends State<SessionEditPage> {
     }
   }
 
+  Future<void> _showDateSelection() async {
+    final DateTime initialDate = DateTime.parse(_selectedDate);
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime.now().subtract(Duration(days: 365)),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+
+    if (selectedDate != null) {
+      setState(() {
+        _selectedDate = selectedDate.toIso8601String().split('T')[0];
+      });
+    }
+  }
+
   Future<void> _updateSession() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -539,7 +559,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
           phone: fullPhoneNumber,
           service: _selectedService,
           duration: _duration,
-          date: widget.session.date,
+          date: _selectedDate,
           time: _formatTime(_selectedTime),
           notes: _notesController.text.trim().isEmpty
               ? null
@@ -1017,15 +1037,37 @@ class _SessionEditPageState extends State<SessionEditPage> {
                                           ],
                                         ),
                                         SizedBox(height: 4),
-                                        Text(
-                                          '${language.getText('Дата:', 'Дата:')} ${_formatDate(widget.session.date, language)}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onPrimaryContainer
-                                                .withValues(alpha: 0.7),
-                                          ),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                '${language.getText('Дата:', 'Дата:')} ${_formatDate(_selectedDate, language)}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onPrimaryContainer
+                                                      .withValues(alpha: 0.7),
+                                                ),
+                                              ),
+                                            ),
+                                            // Кнопка зміни дати
+                                            IconButton(
+                                              onPressed: _showDateSelection,
+                                              icon: Icon(
+                                                Icons.calendar_today,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                              ),
+                                              tooltip: language.getText(
+                                                'Змінити дату',
+                                                'Изменить дату',
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     );
@@ -1098,6 +1140,9 @@ class _SessionEditPageState extends State<SessionEditPage> {
                       displayStringForOption: (client) =>
                           client['name'] as String,
                       onSelected: (client) {
+                        // Приховуємо клавіатуру при виборі клієнтки
+                        FocusScope.of(context).unfocus();
+                        
                         _clientNameController.text = client['name'] as String;
 
                         // Заповнюємо телефон та визначаємо код країни

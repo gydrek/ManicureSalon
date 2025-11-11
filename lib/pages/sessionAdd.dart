@@ -162,6 +162,7 @@ class _SessionAddPageState extends State<SessionAddPage> {
     'Покриття гель-лак (ноги)',
     'Нарощування вій',
     'Нарощування нижніх вій',
+    'Ремонт',
   ];
 
   // Метод для отримання локалізованої назви послуги
@@ -189,6 +190,8 @@ class _SessionAddPageState extends State<SessionAddPage> {
         return language.getText('Нарощування вій', 'Наращивание ресниц');
       case 'Нарощування нижніх вій':
         return language.getText('Нарощування нижніх вій', 'Наращивание нижних ресниц');
+      case 'Ремонт':
+        return language.getText('Ремонт', 'Ремонт');
       default:
         return service;
     }
@@ -712,6 +715,9 @@ class _SessionAddPageState extends State<SessionAddPage> {
                       displayStringForOption: (client) =>
                           client['name'] as String,
                       onSelected: (client) {
+                        // Приховуємо клавіатуру при виборі клієнтки
+                        FocusScope.of(context).unfocus();
+                        
                         _clientNameController.text = client['name'] as String;
 
                         // Заповнюємо телефон та визначаємо код країни

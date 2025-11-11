@@ -458,63 +458,69 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             )
           else
-            ...appState.masters.map((master) {
-              final isEnabled = _masterNotifications[master.id] ?? true;
-              
-              return Container(
-                margin: EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: SwitchListTile(
-                  value: isEnabled,
-                  onChanged: (value) => _onNotificationChanged(master.id!, value),
-                  title: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
-                            ],
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.person,
-                          size: 20,
-                          color: Colors.white,
+            Consumer<LanguageProvider>(
+              builder: (context, language, child) {
+                return Column(
+                  children: appState.masters.map((master) {
+                    final isEnabled = _masterNotifications[master.id] ?? true;
+                    
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
                         ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: SwitchListTile(
+                        value: isEnabled,
+                        onChanged: (value) => _onNotificationChanged(master.id!, value),
+                        title: Row(
                           children: [
-                            Text(
-                              master.name,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(context).colorScheme.secondary,
+                                  ],
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    master.getLocalizedName(language.currentLocale.languageCode),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
+                        activeColor: Theme.of(context).colorScheme.primary,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       ),
-                    ],
-                  ),
-                  activeColor: Theme.of(context).colorScheme.primary,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                ),
-              );
-            }).toList(),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
         ],
       ),
     );

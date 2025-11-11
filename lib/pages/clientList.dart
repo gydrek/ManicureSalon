@@ -56,6 +56,8 @@ class _ClientListPageState extends State<ClientListPage> {
         return language.getText('Нарощування вій', 'Наращивание ресниц');
       case 'Нарощування нижніх вій':
         return language.getText('Нарощування нижніх вій', 'Наращивание нижних ресниц');
+      case 'Ремонт':
+        return language.getText('Ремонт', 'Ремонт');
       default:
         return service;
     }
@@ -959,8 +961,17 @@ class _ClientListPageState extends State<ClientListPage> {
                                                         language,
                                                         child,
                                                       ) {
+                                                        // Розраховуємо час закінчення сесії
+                                                        final startTime = session.time;
+                                                        final timeParts = startTime.split(':');
+                                                        final startMinutes = int.parse(timeParts[0]) * 60 + int.parse(timeParts[1]);
+                                                        final endMinutes = startMinutes + session.duration;
+                                                        final endHour = (endMinutes ~/ 60).toString().padLeft(2, '0');
+                                                        final endMinute = (endMinutes % 60).toString().padLeft(2, '0');
+                                                        final endTime = '$endHour:$endMinute';
+                                                        
                                                         return Text(
-                                                          '${language.getText('Час', 'Время')}: ${session.time} (${session.duration} ${language.getText('хв', 'мин')})',
+                                                          '${language.getText('Час', 'Время')}: $startTime-$endTime (${session.duration} ${language.getText('хв', 'мин')})',
                                                         );
                                                       },
                                                 ),
@@ -1432,7 +1443,18 @@ class _ClientListPageState extends State<ClientListPage> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        '${language.getText('Час', 'Время')}: ${session.time}',
+                        () {
+                          // Розраховуємо час закінчення сесії
+                          final startTime = session.time;
+                          final timeParts = startTime.split(':');
+                          final startMinutes = int.parse(timeParts[0]) * 60 + int.parse(timeParts[1]);
+                          final endMinutes = startMinutes + session.duration;
+                          final endHour = (endMinutes ~/ 60).toString().padLeft(2, '0');
+                          final endMinute = (endMinutes % 60).toString().padLeft(2, '0');
+                          final endTime = '$endHour:$endMinute';
+                          
+                          return '${language.getText('Час', 'Время')}: $startTime-$endTime (${session.duration} ${language.getText('хв', 'мин')})';
+                        }(),
                       ),
                       Text(
                         '${language.getText('Послуга', 'Услуга')}: ${_getLocalizedService(session.service, language)}',

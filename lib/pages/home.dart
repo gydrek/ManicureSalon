@@ -247,8 +247,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             content: Consumer<LanguageProvider>(
                               builder: (context, language, child) {
                                 return Text(language.getText(
-                                  'Nogotochki (beta) v1.1.1 (build 3)',
-                                  'Nogotochki (beta) v1.1.1 (build 3)',
+                                  'Nogotochki (beta) v1.2.0 (build 4)',
+                                  'Nogotochki (beta) v1.2.0 (build 4)',
                                 ));
                               },
                             ),
@@ -280,7 +280,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                child: appState.isLoading
+                child: appState.isLoading || appState.masters.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -306,23 +306,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               },
                             ),
                           ],
-                        ),
-                      )
-                    : appState.masters.isEmpty
-                    ? Center(
-                        child: Consumer<LanguageProvider>(
-                          builder: (context, language, child) {
-                            return Text(
-                              language.getText(
-                                'Майстрині не знайдені',
-                                'Мастерицы не найдены',
-                              ),
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            );
-                          },
                         ),
                       )
                     : RefreshIndicator(
@@ -465,12 +448,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     final now = DateTime.now();
-    final twoHoursLater = now.add(Duration(hours: 2));
 
     // Отримуємо всі сесії цієї майстрині
     final allSessions = appState.getSessionsForMaster(master.id!);
 
-    // Перевіряємо чи є поточні або майбутні записи
+    // Перевіряємо чи є ТІЛЬКИ поточні записи (без урахування майбутніх)
     final hasBusySession = allSessions.any((session) {
       try {
         // Парсимо дату сесії (формат: yyyy-mm-dd)
@@ -489,27 +471,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Duration(minutes: session.duration),
         );
 
-        // Перевіряємо різні сценарії:
-        // 1. Поточна сесія (зараз між початком та кінцем сесії)
+        // Перевіряємо ТІЛЬКИ поточну сесію (зараз між початком та кінцем сесії)
         final isCurrentSession =
             now.isAfter(sessionStartTime) && now.isBefore(sessionEndTime);
-
-        // 2. Майбутня сесія в наступні 2 години
-        final isFutureSessionInTwoHours =
-            sessionStartTime.isAfter(now) &&
-            sessionStartTime.isBefore(twoHoursLater);
 
         if (isCurrentSession) {
           print(
             '🔴 Майстер ${master.name} зайнята ЗАРАЗ: сесія ${session.clientName} до ${sessionEndTime.hour}:${sessionEndTime.minute.toString().padLeft(2, '0')}',
           );
-        } else if (isFutureSessionInTwoHours) {
-          print(
-            '🟡 Майстер ${master.name} буде зайнята: сесія ${session.clientName} о ${sessionStartTime.hour}:${sessionStartTime.minute.toString().padLeft(2, '0')}',
-          );
         }
 
-        return isCurrentSession || isFutureSessionInTwoHours;
+        return isCurrentSession;
       } catch (e) {
         print(
           'Помилка парсингу дати/часу для сесії: ${session.date} ${session.time}',
@@ -577,19 +549,11 @@ class MasterCard extends StatelessWidget {
     // Перетворюємо ім'я майстрині на lowercase для назви файлу
     final name = masterName.toLowerCase();
     
-    // Підтримувані формати фотографій
-    final formats = ['jpg', 'jpeg', 'png', 'webp'];
-    
-    // Перевіряємо який формат файлу існує
-    for (final format in formats) {
-      final path = 'assets/images/masters/$name.$format';
-      // В Flutter assets завжди вважаються існуючими якщо вони додані в pubspec.yaml
-      // Спробуємо з найпоширенішими іменами
-      if (name == 'настя' || name == 'nastya' || name == 'анастасія' || name == 'анастасия') {
-        return 'assets/images/masters/nastya.$format';
-      } else if (name == 'ніка' || name == 'ника' || name == 'nika' || name == 'вероніка' || name == 'вероника') {
-        return 'assets/images/masters/nika.$format';
-      }
+    // Перевіряємо найпоширеніші імена та повертаємо шлях до фото
+    if (name == 'настя' || name == 'nastya' || name == 'анастасія' || name == 'анастасия') {
+      return 'assets/images/masters/nastya.jpg';
+    } else if (name == 'ніка' || name == 'ника' || name == 'nika' || name == 'вероніка' || name == 'вероника') {
+      return 'assets/images/masters/nika.jpg';
     }
     
     // Якщо фото не знайдено, повертаємо null
