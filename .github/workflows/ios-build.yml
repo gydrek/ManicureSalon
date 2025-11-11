@@ -34,16 +34,33 @@ jobs:
       run: |
         flutter build ios --release --no-codesign
         
-    - name: Створення архіву
+    - name: Отримання версії з pubspec.yaml
+      id: get_version
+      run: |
+        VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Версія: $VERSION"
+        
+    - name: Створення IPA та архіву
       run: |
         cd build/ios/iphoneos
         mkdir -p Payload
         cp -r Runner.app Payload/
-        zip -r ../../../nastya_app_ios.zip Payload/
+        # Створюємо .ipa файл з автоматичною версією
+        zip -r ../../../Nogotochki_v${{ steps.get_version.outputs.version }}.ipa Payload/
+        # Створюємо .zip архів для резерву
+        zip -r ../../../Nogotochki_v${{ steps.get_version.outputs.version }}_archive.zip Payload/
         
-    - name: Завантаження артефакту
+    - name: Завантаження IPA файлу
       uses: actions/upload-artifact@v4
       with:
-        name: iOS Build
-        path: nastya_app_ios.zip
+        name: Nogotochki iOS v${{ steps.get_version.outputs.version }}
+        path: Nogotochki_v${{ steps.get_version.outputs.version }}.ipa
+        retention-days: 30
+        
+    - name: Завантаження ZIP архіву
+      uses: actions/upload-artifact@v4
+      with:
+        name: Nogotochki iOS Archive v${{ steps.get_version.outputs.version }}
+        path: Nogotochki_v${{ steps.get_version.outputs.version }}_archive.zip
         retention-days: 30

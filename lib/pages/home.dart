@@ -247,8 +247,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             content: Consumer<LanguageProvider>(
                               builder: (context, language, child) {
                                 return Text(language.getText(
-                                  'Nogotochki (beta) v1.1.0 (build 2)',
-                                  'Nogotochki (beta) v1.1.0 (build 2)',
+                                  'Nogotochki (beta) v1.1.1 (build 3)',
+                                  'Nogotochki (beta) v1.1.1 (build 3)',
                                 ));
                               },
                             ),
