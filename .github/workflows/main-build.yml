@@ -1,4 +1,4 @@
-name: iOS Build
+name: Main Build & Test
 
 on:
   push:
@@ -8,8 +8,30 @@ on:
   workflow_dispatch: # Дозволяє запускати вручну
 
 jobs:
-  build-ios:
+  test-and-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout код
+      uses: actions/checkout@v4
+    
+    - name: Налаштування Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        
+    - name: Отримання залежностей
+      run: flutter pub get
+      
+    - name: Запуск тестів
+      run: flutter test
+      
+    - name: Перевірка збірки Android
+      run: flutter build apk --debug
+
+  build-ios-full:
     runs-on: macos-latest
+    # needs: test-and-android # Закоментовано для паралельного запуску
     
     steps:
     - name: Checkout код
@@ -18,21 +40,16 @@ jobs:
     - name: Налаштування Flutter
       uses: subosito/flutter-action@v2
       with:
-        channel: 'stable' # Використовує найновішу стабільну версію
+        channel: 'stable'
         
     - name: Отримання залежностей
       run: flutter pub get
       
-    # Аналіз коду відключено для швидкості збірки
-    # - name: Аналіз коду
-    #   run: flutter analyze --no-fatal-infos --no-fatal-warnings
+    - name: Збірка для iOS симулятора (швидка перевірка)
+      run: flutter build ios --simulator --debug
       
-    - name: Запуск тестів
-      run: flutter test
-      
-    - name: Збірка iOS (без підпису)
-      run: |
-        flutter build ios --release --no-codesign
+    - name: Збірка iOS (повна збірка)
+      run: flutter build ios --release --no-codesign
         
     - name: Отримання версії з pubspec.yaml
       id: get_version
