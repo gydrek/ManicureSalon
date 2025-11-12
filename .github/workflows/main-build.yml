@@ -32,6 +32,7 @@ jobs:
   build-ios-full:
     runs-on: macos-latest
     # needs: test-and-android # Закоментовано для паралельного запуску
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]') || github.ref == 'refs/heads/main'
     
     steps:
     - name: Checkout код
@@ -41,14 +42,25 @@ jobs:
       uses: subosito/flutter-action@v2
       with:
         channel: 'stable'
+        cache: true
+        
+    - name: Кешування pub залежностей
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.pub-cache
+          **/.packages
+          **/.flutter-plugins
+          **/.flutter-plugin-dependencies
+        key: ${{ runner.os }}-ios-pub-${{ hashFiles('**/pubspec.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-ios-pub-
         
     - name: Отримання залежностей
       run: flutter pub get
       
-    - name: Збірка для iOS симулятора (швидка перевірка)
-      run: flutter build ios --simulator --debug
-      
-    - name: Збірка iOS (повна збірка)
+    # ОПТИМІЗОВАНО: Прибрали симулятор, залишили тільки основну збірку
+    - name: Збірка iOS (релізна версія)
       run: flutter build ios --release --no-codesign
         
     - name: Отримання версії з pubspec.yaml
