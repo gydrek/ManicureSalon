@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:nastya_app/models/models.dart';
 import 'package:nastya_app/services/firestore_service.dart';
 import 'package:nastya_app/services/notification_service.dart';
+// ТИМЧАСОВО ЗАКОМЕНТОВАНО: import 'package:nastya_app/services/fcm_service.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'dart:async';
 
@@ -154,8 +155,8 @@ class AppStateProvider extends ChangeNotifier {
         '✅ Дані оновлено з БД о ${_formatTime(_lastUpdate)} (майстри: ${_masters.length}, клієнти: ${_clients.length}, сесії: ${_sessionsByMaster.values.expand((s) => s).length})',
       );
 
-      // Плануємо сповіщення для всіх активних сесій
-      await _scheduleNotificationsForActiveSessions();
+      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для всіх активних сесій
+      // await _scheduleNotificationsForActiveSessions();
     } catch (e) {
       print('❌ Помилка оновлення даних: $e');
     } finally {
@@ -496,6 +497,8 @@ class AppStateProvider extends ChangeNotifier {
         time: session.time,
         notes: session.notes,
         price: session.price,
+        isRegularClient: session.isRegularClient,
+        status: session.status,
       );
 
       if (!_sessionsByMaster.containsKey(session.masterId)) {
@@ -510,10 +513,18 @@ class AppStateProvider extends ChangeNotifier {
 
       _calculateNextSessions();
 
-      // Плануємо сповіщення для нової сесії (якщо статус "в очікуванні")
-      if (updatedSession.status == 'в очікуванні') {
-        _notificationService.scheduleSessionEndNotification(updatedSession);
-      }
+      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для нової сесії (якщо статус "в очікуванні")
+      // if (updatedSession.status == 'в очікуванні') {
+      //   print('🔄 Плануємо сповіщення для нової сесії ${updatedSession.id}');
+      //   _notificationService.scheduleSessionEndNotification(updatedSession);
+      //   
+      //   // Плануємо FCM сповіщення для крос-девайсної синхронізації
+      //   print('📲 Викликаємо _scheduleFCMNotifications...');
+      //   await _scheduleFCMNotifications(updatedSession);
+      //   print('✅ _scheduleFCMNotifications завершено');
+      // } else {
+      //   print('⚠️ Сесія не в очікуванні, статус: ${updatedSession.status}');
+      // }
 
       // Інвалідуємо кеш після додавання нового запису
       _lastDataLoad = null;
@@ -526,10 +537,31 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Оновити сесію
   Future<bool> updateSession(String sessionId, Session session) async {
+    // Знаходимо стару сесію для порівняння
+    Session? oldSession;
+    for (final masterId in _sessionsByMaster.keys) {
+      final index = _sessionsByMaster[masterId]!.indexWhere(
+        (s) => s.id == sessionId,
+      );
+      if (index != -1) {
+        oldSession = _sessionsByMaster[masterId]![index];
+        break;
+      }
+    }
+
     final success = await _firestoreService.updateSession(sessionId, session);
     if (success) {
-      // Скасовуємо сповіщення для цієї сесії (якщо статус змінився)
-      cancelSessionNotifications(sessionId);
+      // Скасовуємо сповіщення тільки якщо змінився статус, дата або час
+      final shouldCancelTimers = oldSession == null ||
+          oldSession.status != session.status ||
+          oldSession.date != session.date ||
+          oldSession.time != session.time ||
+          oldSession.duration != session.duration;
+
+      if (shouldCancelTimers) {
+        cancelSessionNotifications(sessionId);
+        print('⏹️ Скасовано таймери для сесії $sessionId через зміну критичних параметрів');
+      }
 
       // Знаходимо та оновлюємо в локальному стані
       for (final masterId in _sessionsByMaster.keys) {
@@ -545,6 +577,16 @@ class AppStateProvider extends ChangeNotifier {
           print('✏️ Запис оновлено, кеш інвалідовано');
 
           notifyListeners();
+
+          // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для оновленої сесії (якщо скасували таймери і сесія активна)
+          // if (shouldCancelTimers && session.status == 'в очікуванні') {
+          //   try {
+          //     _notificationService.scheduleSessionEndNotification(session);
+          //     print('📱 Перепланували таймери для оновленої сесії $sessionId');
+          //   } catch (e) {
+          //     print('❌ Помилка перепланування таймерів: $e');
+          //   }
+          // }
           break;
         }
       }
@@ -556,6 +598,10 @@ class AppStateProvider extends ChangeNotifier {
   Future<bool> deleteSession(String sessionId) async {
     final success = await _firestoreService.deleteSession(sessionId);
     if (success) {
+      // Скасовуємо всі таймери для видаленої сесії
+      cancelSessionNotifications(sessionId);
+      print('⏹️ Скасовано таймери для видаленої сесії $sessionId');
+
       // Видаляємо з локального стану
       for (final masterId in _sessionsByMaster.keys) {
         _sessionsByMaster[masterId]!.removeWhere((s) => s.id == sessionId);
@@ -602,36 +648,42 @@ class AppStateProvider extends ChangeNotifier {
   // ===== СПОВІЩЕННЯ =====
 
   /// Запланувати сповіщення для всіх активних сесій
-  Future<void> _scheduleNotificationsForActiveSessions() async {
-    try {
-      // Ініціалізуємо сервіс сповіщень
-      await _notificationService.initialize();
-
-      // Передаємо провайдер мови в сервіс сповіщень
-      if (_languageProvider != null) {
-        _notificationService.setLanguageProvider(_languageProvider!);
-      }
-
-      // Збираємо всі сесії
-      final allSessions = <Session>[];
-      for (final sessions in _sessionsByMaster.values) {
-        allSessions.addAll(sessions);
-      }
-
-      // Плануємо сповіщення
-      await _notificationService.scheduleNotificationsForActiveSessions(
-        allSessions,
-      );
-
-      print('📱 Заплановано сповіщення для активних сесій');
-    } catch (e) {
-      print('❌ Помилка планування сповіщень: $e');
-    }
-  }
+  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Планування сповіщень для активних сесій
+  // Future<void> _scheduleNotificationsForActiveSessions() async {
+  //   try {
+  //     // Ініціалізуємо сервіс сповіщень
+  //     await _notificationService.initialize();
+  //
+  //     // Передаємо провайдер мови в сервіс сповіщень
+  //     if (_languageProvider != null) {
+  //       _notificationService.setLanguageProvider(_languageProvider!);
+  //     }
+  //
+  //     // Збираємо всі сесії
+  //     final allSessions = <Session>[];
+  //     for (final sessions in _sessionsByMaster.values) {
+  //       allSessions.addAll(sessions);
+  //     }
+  //
+  //     // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення
+  //     // await _notificationService.scheduleNotificationsForActiveSessions(
+  //     //   allSessions,
+  //     // );
+  //
+  //     // print('📱 Заплановано сповіщення для активних сесій');
+  //   } catch (e) {
+  //     print('❌ Помилка планування сповіщень: $e');
+  //   }
+  // }
 
   /// Скасувати таймери сповіщень для сесії (коли статус змінюється)
   void cancelSessionNotifications(String sessionId) {
     _notificationService.cancelSessionTimers(sessionId);
+  }
+
+  /// Отримати інформацію про активні таймери (для debug)
+  Map<String, dynamic> getTimersInfo() {
+    return _notificationService.getTimersInfo();
   }
 
   // ===== УПРАВЛІННЯ КЕШЕМ =====
@@ -681,6 +733,64 @@ class AppStateProvider extends ChangeNotifier {
     _cacheInvalidated = true;
     await refreshAllData(forceRefresh: true);
   }
+
+  // ===== FCM СПОВІЩЕННЯ =====
+
+  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Планування FCM сповіщень для крос-девайсної синхронізації
+  // Future<void> _scheduleFCMNotifications(Session session) async {
+  //   try {
+  //     print('🔍 Починаємо планування FCM для сесії ${session.id}');
+  //     print('🔍 Майстер ID: ${session.masterId}');
+  //     print('🔍 Доступні майстри: ${_masters.map((m) => '${m.id}:${m.name}').join(', ')}');
+  //     
+  //     // Отримуємо дані майстрині для сповіщення
+  //     final master = _masters.firstWhere(
+  //       (m) => m.id == session.masterId,
+  //       orElse: () => Master(
+  //         id: session.masterId,
+  //         name: 'Майстриня',
+  //         status: 'active',
+  //       ),
+  //     );
+  //     
+  //     print('🔍 Знайдено майстра: ${master.name}');
+  //
+  //     // Розраховуємо час завершення сесії
+  //     final sessionDateTime = _parseSessionDateTime(session);
+  //     final sessionEndTime = sessionDateTime.add(Duration(minutes: session.duration));
+  //     
+  //     print('🔍 Час сесії: $sessionDateTime');
+  //     print('🔍 Час завершення: $sessionEndTime');
+  //     print('🔍 Тривалість: ${session.duration} хв');
+  //
+  //     // Плануємо FCM сповіщення про завершення сесії
+  //     print('📲 Викликаємо FCMService.sendSessionEndNotification...');
+  //     await FCMService().sendSessionEndNotification(
+  //       session: session,
+  //       masterName: master.name,
+  //       endTime: sessionEndTime,
+  //     );
+  //
+  //     print('✅ FCM сповіщення заплановано для сесії ${session.id}');
+  //   } catch (e) {
+  //     print('❌ Помилка планування FCM сповіщень: $e');
+  //     print('❌ Stack trace: ${e.toString()}');
+  //   }
+  // }
+
+  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Парсинг дати та часу сесії
+  // DateTime _parseSessionDateTime(Session session) {
+  //   final dateParts = session.date.split('-');
+  //   final timeParts = session.time.split(':');
+  //
+  //   return DateTime(
+  //     int.parse(dateParts[0]),
+  //     int.parse(dateParts[1]),
+  //     int.parse(dateParts[2]),
+  //     int.parse(timeParts[0]),
+  //     int.parse(timeParts[1]),
+  //   );
+  // }
 
   // ===== ОЧИЩЕННЯ =====
 

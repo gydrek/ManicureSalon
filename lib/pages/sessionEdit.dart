@@ -764,14 +764,19 @@ class _SessionEditPageState extends State<SessionEditPage> {
       });
 
       try {
-        // Скасовуємо сповіщення перед видаленням сесії
+        // Скасовуємо всі сповіщення та таймери перед видаленням сесії
         try {
-          await NotificationService().cancelSessionReminder(widget.session.id!);
+          final notificationService = NotificationService();
+          await notificationService.cancelSessionReminder(widget.session.id!);
+          notificationService.cancelSessionTimers(widget.session.id!);
+          print('⏹️ Скасовано всі таймери для сесії ${widget.session.id}');
         } catch (e) {
-          print('Помилка скасування сповіщення: $e');
+          print('Помилка скасування сповіщень: $e');
         }
 
-        await _firestoreService.deleteSession(widget.session.id!);
+        // Видаляємо через AppStateProvider, щоб правильно скасувались таймери
+        final appState = Provider.of<AppStateProvider>(context, listen: false);
+        await appState.deleteSession(widget.session.id!);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

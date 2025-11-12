@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nastya_app/models/models.dart';
 import 'package:nastya_app/services/firestore_service.dart';
 import 'package:nastya_app/providers/language_provider.dart';
+import 'fcm_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -63,6 +64,9 @@ class NotificationService {
     // Запитуємо дозволи
     await _requestPermissions();
 
+    // Очищаємо старі заплановані сповіщення
+    await cleanupOldScheduledNotifications();
+
     _isInitialized = true;
   }
 
@@ -110,10 +114,34 @@ class NotificationService {
           enableVibration: true,
         );
 
+    // Канал для запланованих сповіщень про завершення сесій
+    const AndroidNotificationChannel sessionEndScheduledChannel =
+        AndroidNotificationChannel(
+          'session_end_scheduled',
+          'Завершення сесій (заплановані)',
+          description: 'Заплановані сповіщення про завершення сесій',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        );
+
+    // Канал для запланованих сповіщень про автоматично пропущені сесії
+    const AndroidNotificationChannel autoMissedScheduledChannel =
+        AndroidNotificationChannel(
+          'auto_missed_scheduled',
+          'Автоматично пропущені (заплановані)',
+          description: 'Заплановані сповіщення про автоматично пропущені сесії',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        );
+
     try {
       await androidImplementation.createNotificationChannel(sessionChannel);
       await androidImplementation.createNotificationChannel(testChannel);
       await androidImplementation.createNotificationChannel(simpleTestChannel);
+      await androidImplementation.createNotificationChannel(sessionEndScheduledChannel);
+      await androidImplementation.createNotificationChannel(autoMissedScheduledChannel);
 
       if (kDebugMode) {
         print('✅ Всі канали сповіщень створено успішно');
@@ -166,6 +194,40 @@ class NotificationService {
       print('❌ Помилка отримання імені майстрині: $e');
     }
     return 'Невідома майстриня';
+  }
+
+  /// Отримати локалізовану назву послуги
+  String _getLocalizedService(String service) {
+    if (_languageProvider == null) return service;
+    
+    switch (service) {
+      case 'Манікюр класичний':
+        return _languageProvider!.getText('Манікюр класичний', 'Маникюр классический');
+      case 'Покриття гель-лак (руки)':
+        return _languageProvider!.getText('Покриття гель-лак (руки)', 'Покрытие гель-лак (руки)');
+      case 'Манікюр':
+        return _languageProvider!.getText('Манікюр', 'Маникюр');
+      case 'Нарощування нігтів (стандарт)':
+        return _languageProvider!.getText('Нарощування нігтів (стандарт)', 'Наращивание ногтей (стандарт)');
+      case 'Нарощування нігтів (довге)':
+        return _languageProvider!.getText('Нарощування нігтів (довге)', 'Наращивание ногтей (длинное)');
+      case 'Манікюр чоловічий':
+        return _languageProvider!.getText('Манікюр чоловічий', 'Маникюр мужской');
+      case 'Педикюр класичний':
+        return _languageProvider!.getText('Педикюр класичний', 'Педикюр классический');
+      case 'Педикюр класичний + покриття гель-лак':
+        return _languageProvider!.getText('Педикюр класичний + покриття гель-лак', 'Педикюр классический + покрытие гель-лак');
+      case 'Покриття гель-лак (ноги)':
+        return _languageProvider!.getText('Покриття гель-лак (ноги)', 'Покрытие гель-лак (ноги)');
+      case 'Нарощування вій':
+        return _languageProvider!.getText('Нарощування вій', 'Наращивание ресниц');
+      case 'Нарощування нижніх вій':
+        return _languageProvider!.getText('Нарощування нижніх вій', 'Наращивание нижних ресниц');
+      case 'Ремонт':
+        return _languageProvider!.getText('Ремонт', 'Ремонт');
+      default:
+        return service;
+    }
   }
 
   Future<void> scheduleSessionReminder({
@@ -236,8 +298,12 @@ class NotificationService {
     // Створюємо унікальний ID для сповіщення
     final notificationId = sessionId.hashCode;
 
+    // Формуємо текст сповіщення
+    final title = 'Нагадування про запис';
+    final body = 'Через 30 хвилин: $clientName у майстра $masterName';
+
     // Налаштування для Android
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
           'session_reminders',
           'Нагадування про записи',
@@ -247,25 +313,28 @@ class NotificationService {
           icon: '@drawable/notification_icon',
           enableVibration: true,
           playSound: true,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: '',
+          ),
         );
 
     // Налаштування для iOS
-    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+    final DarwinNotificationDetails iOSPlatformChannelSpecifics =
         DarwinNotificationDetails(
+          subtitle: 'Нагадування про запис',
           sound: 'default',
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          interruptionLevel: InterruptionLevel.active,
         );
 
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+    final NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
     );
-
-    // Формуємо текст сповіщення
-    final title = 'Нагадування про запис';
-    final body = 'Через 30 хвилин: $clientName у майстра $masterName';
 
     // Плануємо сповіщення
     try {
@@ -289,6 +358,34 @@ class NotificationService {
         payload: 'session_$sessionId',
       );
 
+      // Також плануємо через FCM для синхронізації між пристроями
+      try {
+        // Створюємо мінімальну Session для FCM (з обов'язковими полями)
+        final sessionForFCM = Session(
+          id: sessionId,
+          masterId: masterId,
+          clientId: 'unknown', // Поки не маємо clientId в цьому контексті
+          clientName: clientName,
+          service: 'Запис', // Загальна назва
+          duration: 60, // Стандартна тривалість
+          date: DateTime.now().toIso8601String().split('T')[0], // Поточна дата як заглушка
+          time: DateTime.now().toIso8601String().split('T')[1].substring(0, 5), // Поточний час як заглушка
+          status: 'в очікуванні',
+        );
+
+        await FCMService().sendSessionReminderNotification(
+          session: sessionForFCM,
+          masterName: masterName,
+          reminderTime: notificationTime,
+        );
+        if (kDebugMode) {
+          print('✅ FCM сповіщення також заплановано');
+        }
+      } catch (e) {
+        print('⚠️ Помилка планування FCM сповіщення: $e');
+        // Не падаємо, локальне сповіщення все одно працює
+      }
+
       if (kDebugMode) {
         print(
           '✅ Сповіщення успішно заплановано для сесії $sessionId на $notificationTime',
@@ -310,6 +407,16 @@ class NotificationService {
   Future<void> cancelSessionReminder(String sessionId) async {
     final notificationId = sessionId.hashCode;
     await _flutterLocalNotificationsPlugin.cancel(notificationId);
+
+    // Також скасовуємо FCM сповіщення
+    try {
+      await FCMService().cancelSessionNotifications(sessionId);
+      if (kDebugMode) {
+        print('✅ FCM сповіщення також скасовано');
+      }
+    } catch (e) {
+      print('⚠️ Помилка скасування FCM сповіщення: $e');
+    }
 
     if (kDebugMode) {
       print('Скасовано сповіщення для сесії $sessionId');
@@ -337,9 +444,31 @@ class NotificationService {
             IOSFlutterLocalNotificationsPlugin
           >()
           ?.checkPermissions();
-      return settings?.isEnabled ?? false;
+      return settings?.isEnabled == true;
     }
     return false;
+  }
+
+  /// Очистити старі заплановані сповіщення при запуску застосунку
+  Future<void> cleanupOldScheduledNotifications() async {
+    try {
+      final pendingNotifications = await getPendingNotifications();
+
+      for (final notification in pendingNotifications) {
+        // Перевіряємо чи це наші заплановані сповіщення
+        if (notification.payload?.startsWith('session_end_') == true || 
+            notification.payload?.startsWith('auto_missed_') == true) {
+          
+          // Можна додати логіку для перевірки чи сесія ще актуальна
+          // Наразі просто виводимо інформацію
+          print('📋 Знайдено заплановане сповіщення: ${notification.title} (ID: ${notification.id})');
+        }
+      }
+
+      print('🧹 Перевірка старих запланованих сповіщень завершена. Знайдено: ${pendingNotifications.length}');
+    } catch (e) {
+      print('❌ Помилка очищення старих сповіщень: $e');
+    }
   }
 
   Future<void> showImmediateNotification({
@@ -350,7 +479,7 @@ class NotificationService {
       await initialize();
     }
 
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
           'test_notifications',
           'Тестові сповіщення',
@@ -360,17 +489,24 @@ class NotificationService {
           icon: '@drawable/notification_icon',
           enableVibration: true,
           playSound: true,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: '',
+          ),
         );
 
-    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+    final DarwinNotificationDetails iOSPlatformChannelSpecifics =
         DarwinNotificationDetails(
+          subtitle: 'Миттєве сповіщення',
           sound: 'default',
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          interruptionLevel: InterruptionLevel.active,
         );
 
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+    final NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
     );
@@ -408,12 +544,20 @@ class NotificationService {
       // Скасовуємо попередні таймери для цієї сесії
       _cancelSessionTimers(session.id!);
 
-      // Плануємо сповіщення про завершення сесії
+      // Плануємо сповіщення про завершення сесії (Timer - працює тільки поки застосунок активний)
       final timeUntilEnd = sessionEndTime.difference(now);
       _sessionTimers[session.id!] = Timer(timeUntilEnd, () {
         _showSessionEndNotification(session);
         _scheduleAutoMissedTimer(session);
       });
+
+      // ДОДАТКОВО: Плануємо реальне сповіщення через flutter_local_notifications
+      // Це сповіщення спрацює навіть якщо застосунок закритий
+      _scheduleRealSessionEndNotification(session, sessionEndTime);
+
+      // Плануємо також сповіщення про автоматичне пропущення через 15 хвилин після завершення
+      final autoMissedTime = sessionEndTime.add(Duration(minutes: 15));
+      _scheduleRealAutoMissedNotification(session, autoMissedTime);
 
       print(
         '⏰ Заплановано сповіщення для сесії ${session.id} на ${sessionEndTime.toIso8601String()}',
@@ -434,6 +578,108 @@ class NotificationService {
     );
   }
 
+  /// Запланувати реальне сповіщення про завершення сесії (працює навіть коли застосунок закритий)
+  Future<void> _scheduleRealSessionEndNotification(Session session, DateTime sessionEndTime) async {
+    try {
+      final masterName = await _getMasterName(session.masterId);
+      final localizedService = _getLocalizedService(session.service);
+      
+      final title = _languageProvider?.getText('⏰ Сеанс завершен', '⏰ Сеанс завершен') ?? '⏰ Сеанс завершен';
+      final body = '${session.clientName} - $localizedService\nМайстриня: $masterName\nБудь ласка, оновіть статус запису';
+      
+      final scheduledTime = tz.TZDateTime.from(sessionEndTime, tz.local);
+      final notificationId = session.id.hashCode + 2000; // Унікальний ID для планованих сповіщень
+
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        title,
+        body,
+        scheduledTime,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'session_end_scheduled',
+            'Завершення сесій (заплановані)',
+            channelDescription: 'Заплановані сповіщення про завершення сесій',
+            importance: Importance.high,
+            priority: Priority.high,
+            showWhen: true,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+              summaryText: '',
+            ),
+          ),
+          iOS: DarwinNotificationDetails(
+            subtitle: 'Сесія завершена',
+            sound: 'default',
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.active,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'session_end_${session.id}',
+      );
+
+      print('📅 Заплановано реальне сповіщення про завершення сесії ${session.id} на $sessionEndTime');
+    } catch (e) {
+      print('❌ Помилка планування реального сповіщення: $e');
+    }
+  }
+
+  /// Запланувати реальне сповіщення про автоматичне пропущення (працює навіть коли застосунок закритий)
+  Future<void> _scheduleRealAutoMissedNotification(Session session, DateTime autoMissedTime) async {
+    try {
+      final masterName = await _getMasterName(session.masterId);
+      final localizedService = _getLocalizedService(session.service);
+      
+      final title = _languageProvider?.getText('❌ Запис пропущено', '❌ Запись пропущена') ?? '❌ Запис пропущено';
+      final body = '${session.clientName} - $localizedService\nМайстриня: $masterName\nЗапис автоматично позначено як пропущений';
+      
+      final scheduledTime = tz.TZDateTime.from(autoMissedTime, tz.local);
+      final notificationId = session.id.hashCode + 3000; // Унікальний ID для auto-missed сповіщень
+
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        title,
+        body,
+        scheduledTime,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'auto_missed_scheduled',
+            'Автоматично пропущені (заплановані)',
+            channelDescription: 'Заплановані сповіщення про автоматично пропущені сесії',
+            importance: Importance.high,
+            priority: Priority.high,
+            showWhen: true,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+              summaryText: '',
+            ),
+          ),
+          iOS: DarwinNotificationDetails(
+            subtitle: 'Автоматично пропущено',
+            sound: 'default',
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.active,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'auto_missed_${session.id}',
+      );
+
+      print('📅 Заплановано реальне сповіщення про автоматичне пропущення сесії ${session.id} на $autoMissedTime');
+    } catch (e) {
+      print('❌ Помилка планування реального auto-missed сповіщення: $e');
+    }
+  }
+
   /// Показати сповіщення про завершення сесії
   Future<void> _showSessionEndNotification(Session session) async {
     // Отримуємо ім'я майстрині
@@ -452,7 +698,11 @@ class NotificationService {
     final masterText =
         _languageProvider?.getText('Майстриня', 'Мастерица') ?? 'Майстриня';
 
-    const AndroidNotificationDetails androidDetails =
+    final localizedService = _getLocalizedService(session.service);
+    final body =
+        '${session.clientName} - $localizedService\n$masterText: $masterName\n$updateStatusText';
+
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
           'session_end_channel',
           'Завершення сесій',
@@ -460,21 +710,26 @@ class NotificationService {
           importance: Importance.high,
           priority: Priority.high,
           showWhen: true,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: '',
+          ),
         );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      subtitle: 'Сесія завершена',
+      sound: 'default',
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      interruptionLevel: InterruptionLevel.active,
     );
 
-    const NotificationDetails details = NotificationDetails(
+    final NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
-
-    final body =
-        '${session.clientName} - ${session.service}\n$masterText: $masterName\n$updateStatusText';
 
     await _flutterLocalNotificationsPlugin.show(
       session.id.hashCode,
@@ -496,7 +751,12 @@ class NotificationService {
         session.id!,
       );
 
-      if (currentSession != null && currentSession.status == 'в очікуванні') {
+      if (currentSession == null) {
+        print('ℹ️ Сесія ${session.id} більше не існує (видалена), пропускаємо автоматичну зміну статусу');
+        return;
+      }
+
+      if (currentSession.status == 'в очікуванні') {
         // Оновлюємо статус на "пропущено"
         final updatedSession = Session(
           id: currentSession.id,
@@ -527,7 +787,7 @@ class NotificationService {
         );
       } else {
         print(
-          'ℹ️ Сесія ${session.id} вже має статус "${currentSession?.status}", пропускаємо автоматичну зміну',
+          'ℹ️ Сесія ${session.id} вже має статус "${currentSession.status}", пропускаємо автоматичну зміну',
         );
       }
     } catch (e) {
@@ -543,10 +803,10 @@ class NotificationService {
     // Локалізовані тексти
     final title =
         _languageProvider?.getText(
-          '🔄 Статус запису: "Пропущено"',
-          '🔄 Статус записи: "Пропущено"',
+          '🔴 Статус запису: "Пропущено"',
+          '🔴 Статус записи: "Пропущено"',
         ) ??
-        '🔄 Статус запису: "Пропущено"';
+        '🔴 Статус запису: "Пропущено"';
     final statusChangedText =
         _languageProvider?.getText(
           'Статус змінено на "Пропущено"',
@@ -556,29 +816,38 @@ class NotificationService {
     final masterText =
         _languageProvider?.getText('Майстриня', 'Мастерица') ?? 'Майстриня';
 
-    const AndroidNotificationDetails androidDetails =
+    final localizedService = _getLocalizedService(session.service);
+    final body =
+        '${session.clientName} - $localizedService\n$masterText: $masterName\n$statusChangedText';
+
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
           'auto_missed_channel',
-          'Автоматичні зміни статусу',
-          channelDescription: 'Сповіщення про автоматичні зміни статусу сесій',
+          'Автоматично пропущені',
+          channelDescription: 'Сповіщення про автоматично пропущені сесії',
           importance: Importance.high,
           priority: Priority.high,
           showWhen: true,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: '',
+          ),
         );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      subtitle: 'Автоматично пропущено',
+      sound: 'default',
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      interruptionLevel: InterruptionLevel.active,
     );
 
-    const NotificationDetails details = NotificationDetails(
+    final NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
-
-    final body =
-        '${session.clientName} - ${session.service}\n$masterText: $masterName\n$statusChangedText';
 
     await _flutterLocalNotificationsPlugin.show(
       (session.id.hashCode + 1000), // Інший ID для уникнення конфліктів
@@ -599,11 +868,32 @@ class NotificationService {
   }
 
   void _cancelSessionTimers(String sessionId) {
+    // Скасовуємо таймери
     _sessionTimers[sessionId]?.cancel();
     _sessionTimers.remove(sessionId);
 
     _autoMissedTimers[sessionId]?.cancel();
     _autoMissedTimers.remove(sessionId);
+
+    // Скасовуємо заплановані сповіщення
+    _cancelScheduledNotifications(sessionId);
+  }
+
+  /// Скасувати заплановані сповіщення для сесії
+  Future<void> _cancelScheduledNotifications(String sessionId) async {
+    try {
+      // Скасовуємо сповіщення про завершення сесії
+      final sessionEndNotificationId = sessionId.hashCode + 2000;
+      await _flutterLocalNotificationsPlugin.cancel(sessionEndNotificationId);
+
+      // Скасовуємо сповіщення про автоматичне пропущення
+      final autoMissedNotificationId = sessionId.hashCode + 3000;
+      await _flutterLocalNotificationsPlugin.cancel(autoMissedNotificationId);
+
+      print('🗑️ Скасовано заплановані сповіщення для сесії $sessionId');
+    } catch (e) {
+      print('❌ Помилка скасування запланованих сповіщень: $e');
+    }
   }
 
   /// Запланувати сповіщення для всіх активних сесій
@@ -668,23 +958,49 @@ class NotificationService {
     print('🧹 Очищено всі таймери сповіщень');
   }
 
+  /// Отримати інформацію про активні таймери (для debug)
+  Map<String, dynamic> getTimersInfo() {
+    return {
+      'sessionTimers': _sessionTimers.keys.toList(),
+      'autoMissedTimers': _autoMissedTimers.keys.toList(),
+      'totalSessionTimers': _sessionTimers.length,
+      'totalAutoMissedTimers': _autoMissedTimers.length,
+    };
+  }
+
   Future<void> showSimpleTest() async {
     if (!_isInitialized) {
       await initialize();
     }
 
     // Показуємо миттєве сповіщення
+    const title = 'Простий тест';
+    const body = 'Якщо бачите це - сповіщення працюють!';
+    
     await _flutterLocalNotificationsPlugin.show(
       999,
-      'Простий тест',
-      'Якщо бачите це - сповіщення працюють!',
-      const NotificationDetails(
+      title,
+      body,
+      NotificationDetails(
         android: AndroidNotificationDetails(
           'test_simple',
           'Простий тест',
           channelDescription: 'Канал для простого тесту',
           importance: Importance.max,
           priority: Priority.high,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: '',
+          ),
+        ),
+        iOS: DarwinNotificationDetails(
+          subtitle: 'Тестове сповіщення',
+          sound: 'default',
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.active,
         ),
       ),
     );
@@ -694,18 +1010,34 @@ class NotificationService {
       final testTime = DateTime.now().add(Duration(minutes: 1));
       final scheduledTime = tz.TZDateTime.from(testTime, tz.local);
 
+      const scheduledTitle = 'Заплановане тестове сповіщення';
+      const scheduledBody = 'Це сповіщення було заплановано на 1 хвилину!';
+      
       await _flutterLocalNotificationsPlugin.zonedSchedule(
         998, // Інший ID для запланованого тесту
-        'Заплановане тестове сповіщення',
-        'Це сповіщення було заплановано на 1 хвилину!',
+        scheduledTitle,
+        scheduledBody,
         scheduledTime,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'test_simple',
             'Простий тест',
             channelDescription: 'Канал для простого тесту',
             importance: Importance.max,
             priority: Priority.high,
+            styleInformation: BigTextStyleInformation(
+              scheduledBody,
+              contentTitle: scheduledTitle,
+              summaryText: '',
+            ),
+          ),
+          iOS: DarwinNotificationDetails(
+            subtitle: 'Заплановане тестове сповіщення',
+            sound: 'default',
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.active,
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

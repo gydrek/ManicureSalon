@@ -615,8 +615,6 @@ class _SettingsPageState extends State<SettingsPage> {
     print('✅ Простий тест відправлено');
   }
 
-
-
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
