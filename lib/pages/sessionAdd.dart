@@ -5,7 +5,7 @@ import 'package:nastya_app/models/models.dart';
 import 'package:nastya_app/widgets/connectivity_wrapper.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'package:nastya_app/providers/app_state_provider.dart';
-import 'package:nastya_app/services/notification_service.dart';
+import 'package:nastya_app/services/fcm_service.dart';
 import 'package:provider/provider.dart';
 
 // Клас для валідації телефонних номерів
@@ -14,6 +14,7 @@ class PhoneValidator {
     '+380': {
       'name': 'Україна',
       'nameRu': 'Украина',
+      'flag': '🇺🇦',
       'minLength': 9,
       'maxLength': 9,
       'pattern': r'^[0-9]{9}$',
@@ -21,9 +22,18 @@ class PhoneValidator {
     '+49': {
       'name': 'Німеччина',
       'nameRu': 'Германия',
+      'flag': '🇩🇪',
       'minLength': 10,
       'maxLength': 11,
       'pattern': r'^[0-9]{10,11}$',
+    },
+    '+40': {
+      'name': 'Румунія',
+      'nameRu': 'Румыния',
+      'flag': '🇷🇴',
+      'minLength': 9,
+      'maxLength': 9,
+      'pattern': r'^[0-9]{9}$',
     },
   };
 
@@ -302,6 +312,9 @@ class _SessionAddPageState extends State<SessionAddPage> {
   }
 
   Future<void> _selectTime() async {
+    // Прибираємо фокус з усіх полів перед відкриттям діалогу часу
+    FocusScope.of(context).unfocus();
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime,
@@ -321,11 +334,22 @@ class _SessionAddPageState extends State<SessionAddPage> {
         );
       },
     );
+    
+    // Незалежно від результату, прибираємо фокус після закриття діалогу
+    FocusScope.of(context).unfocus();
+    
     if (picked != null && picked != _selectedTime) {
       setState(() {
         _selectedTime = picked;
       });
     }
+    
+    // Додаткове прибирання фокуса через затримку для надійності
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+    });
   }
 
   Future<void> _saveSession() async {
@@ -409,6 +433,23 @@ class _SessionAddPageState extends State<SessionAddPage> {
         final sessionId = await _firestoreService.addSession(session);
         print('Сесія збережена з ID: $sessionId');
 
+        // Створюємо об'єкт сесії з ID для FCM
+        final sessionWithId = Session(
+          id: sessionId,
+          masterId: session.masterId,
+          clientId: session.clientId,
+          clientName: session.clientName,
+          phone: session.phone,
+          service: session.service,
+          duration: session.duration,
+          date: session.date,
+          time: session.time,
+          notes: session.notes,
+          price: session.price,
+          isRegularClient: session.isRegularClient,
+          status: session.status,
+        );
+
         // Плануємо сповіщення за 30 хвилин до сесії
         try {
           // Знаходимо ім'я майстра
@@ -425,15 +466,29 @@ class _SessionAddPageState extends State<SessionAddPage> {
             '${session.date} ${session.time}:00',
           );
 
-          await NotificationService().scheduleSessionReminder(
-            sessionId: sessionId ?? '',
-            clientName: session.clientName,
-            masterName: master.name,
-            sessionDateTime: sessionDateTime,
-            masterId: session.masterId,
-          );
+          // Перевіряємо статус перед плануванням сповіщення
+          if (sessionWithId.status == 'в очікуванні') {
+            print('🔔 Плануємо нагадування за 30 хвилин для сесії $sessionId');
+            
+            final fcmService = FCMService();
+            
+            // Тільки нагадування за 30 хвилин до початку
+            final reminderTime = sessionDateTime.subtract(const Duration(minutes: 30));
+            if (reminderTime.isAfter(DateTime.now())) {
+              await fcmService.sendSessionReminderNotification(
+                session: sessionWithId, // Передаємо сесію з ID
+                masterName: master.name,
+                reminderTime: reminderTime,
+              );
+              print('✅ Нагадування заплановано на $reminderTime');
+            } else {
+              print('⏰ Нагадування не потрібне - сесія занадто скоро');
+            }
+          } else {
+            print('ℹ️ Сповіщення не створено - статус: ${sessionWithId.status}');
+          }
         } catch (e) {
-          print('Помилка планування сповіщення: $e');
+          print('❌ Помилка планування FCM сповіщення: $e');
         }
 
         if (mounted) {
@@ -848,8 +903,12 @@ class _SessionAddPageState extends State<SessionAddPage> {
                               builder: (context, language, child) {
                                 return TextFormField(
                                   controller: controller,
-                                  focusNode: focusNode,
+                                  focusNode: focusNode, // Використовуємо оригінальний focusNode для Autocomplete
                                   onEditingComplete: onEditingComplete,
+                                  onTap: () {
+                                    // При натисканні на поле, якщо воно вже заповнене і є інші дані,
+                                    // не даємо фокус автоматично повертатися після інших дій
+                                  },
                                   decoration: InputDecoration(
                                     labelText: language.getText(
                                       "Ім'я клієнтки",
@@ -884,101 +943,147 @@ class _SessionAddPageState extends State<SessionAddPage> {
 
                     SizedBox(height: 16),
 
-                    // Телефон з вибором коду країни
+                    // Кастомне поле телефону з завжди видимим кодом країни
                     Consumer<LanguageProvider>(
                       builder: (context, language, child) {
-                        return TextFormField(
-                          controller: _phoneController,
-                          decoration: InputDecoration(
-                            labelText: language.getText('Телефон*', 'Телефон*'),
-                            prefixIcon: Icon(Icons.phone_outlined),
-                            // Випадаючий список з кодом країни як префікс
-                            prefix: Container(
-                              padding: EdgeInsets.only(right: 8),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _selectedCountryCode,
-                                  isDense: true,
-                                  items: PhoneValidator.countryCodes.entries
-                                      .map((entry) {
-                                        final code = entry.key;
-                                        return DropdownMenuItem<String>(
-                                          value: code,
-                                          child: Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              code,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      })
-                                      .toList(),
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null) {
-                                      setState(() {
-                                        _selectedCountryCode = newValue;
-                                        // НЕ очищуємо поле - залишаємо введені цифри
-                                      });
-                                    }
-                                  },
-                                  selectedItemBuilder: (BuildContext context) {
-                                    return PhoneValidator.countryCodes.keys
-                                        .map<Widget>((String code) {
-                                          return Container(
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              code,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          );
-                                        })
-                                        .toList();
-                                  },
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
                                 ),
+                                borderRadius: BorderRadius.circular(12),
+                                color: Theme.of(context).colorScheme.surface,
+                              ),
+                              child: Row(
+                                children: [
+                                  // Іконка телефону
+                                  Padding(
+                                    padding: EdgeInsets.only(left: 12),
+                                    child: Icon(
+                                      Icons.phone_outlined,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  // Випадаючий список коду країни
+                                  DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedCountryCode,
+                                      isDense: true,
+                                      items: PhoneValidator.countryCodes.entries
+                                          .map((entry) {
+                                            final code = entry.key;
+                                            final config = entry.value;
+                                            return DropdownMenuItem<String>(
+                                              value: code,
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 8,
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      config['flag'] ?? '',
+                                                      style: TextStyle(fontSize: 20),
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Text(
+                                                      code,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          })
+                                          .toList(),
+                                      onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                          setState(() {
+                                            _selectedCountryCode = newValue;
+                                          });
+                                        }
+                                      },
+                                      selectedItemBuilder: (BuildContext context) {
+                                        return PhoneValidator.countryCodes.entries
+                                            .map<Widget>((entry) {
+                                              final code = entry.key;
+                                              final config = entry.value;
+                                              return Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 4),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      config['flag'] ?? '',
+                                                      style: TextStyle(fontSize: 16),
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      code,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            })
+                                            .toList();
+                                      },
+                                    ),
+                                  ),
+                                  // Поле введення номера
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _phoneController,
+                                      decoration: InputDecoration(
+                                        hintText: _selectedCountryCode == '+380'
+                                            ? '67 123 4567'
+                                            : _selectedCountryCode == '+40'
+                                            ? '72 123 4567'
+                                            : '176 12345678',
+                                        hintStyle: TextStyle(
+                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                        ),
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 16,
+                                        ),
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(
+                                          _selectedCountryCode == '+380' || _selectedCountryCode == '+40' ? 9 : 11,
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        setState(() {});
+                                      },
+                                      validator: (value) {
+                                        return PhoneValidator.validatePhone(
+                                          _selectedCountryCode,
+                                          value ?? '',
+                                          language,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            hintText: _selectedCountryCode == '+380'
-                                ? '67 123 4567'
-                                : '176 12345678',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                          ),
-                          keyboardType: TextInputType.phone,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(
-                              _selectedCountryCode == '+380' ? 9 : 11,
-                            ),
                           ],
-                          onChanged: (value) {
-                            // Оновлюємо інтерфейс для показу підказки
-                            setState(() {});
-                          },
-                          validator: (value) {
-                            return PhoneValidator.validatePhone(
-                              _selectedCountryCode,
-                              value ?? '',
-                              language,
-                            );
-                          },
                         );
                       },
                     ),
@@ -1226,7 +1331,15 @@ class _SessionAddPageState extends State<SessionAddPage> {
                         // Час
                         Expanded(
                           child: InkWell(
-                            onTap: _selectTime,
+                            onTap: () async {
+                              // Прибираємо фокус перед викликом діалогу часу
+                              FocusScope.of(context).unfocus();
+                              await _selectTime();
+                              // Після повернення з діалогу знову прибираємо фокус
+                              if (mounted) {
+                                FocusScope.of(context).unfocus();
+                              }
+                            },
                             child: Container(
                               padding: EdgeInsets.all(16),
                               decoration: BoxDecoration(

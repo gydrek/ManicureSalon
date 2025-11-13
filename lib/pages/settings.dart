@@ -559,8 +559,8 @@ class _SettingsPageState extends State<SettingsPage> {
       print('📲 Відправляємо миттєве сповіщення...');
       
       await notificationService.showImmediateNotification(
-        title: language.getText('Тестове сповіщення', 'Тестовое уведомление'),
-        body: language.getText(
+        language.getText('Тестове сповіщення', 'Тестовое уведомление'),
+        language.getText(
           'Сповіщення працюють правильно! ✅',
           'Уведомления работают правильно! ✅'
         ),

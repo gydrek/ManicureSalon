@@ -5,7 +5,8 @@ import 'package:nastya_app/models/models.dart';
 import 'package:nastya_app/widgets/connectivity_wrapper.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'package:nastya_app/providers/app_state_provider.dart';
-import 'package:nastya_app/services/notification_service.dart';
+import 'package:nastya_app/services/fcm_service.dart';
+
 import 'package:provider/provider.dart';
 
 // Клас для валідації телефонних номерів
@@ -14,6 +15,7 @@ class PhoneValidator {
     '+380': {
       'name': 'Україна',
       'nameRu': 'Украина',
+      'flag': '🇺🇦',
       'minLength': 9,
       'maxLength': 9,
       'pattern': r'^[0-9]{9}$',
@@ -21,9 +23,18 @@ class PhoneValidator {
     '+49': {
       'name': 'Німеччина',
       'nameRu': 'Германия',
+      'flag': '🇩🇪',
       'minLength': 10,
       'maxLength': 11,
       'pattern': r'^[0-9]{10,11}$',
+    },
+    '+40': {
+      'name': 'Румунія',
+      'nameRu': 'Румыния',
+      'flag': '🇷🇴',
+      'minLength': 9,
+      'maxLength': 9,
+      'pattern': r'^[0-9]{9}$',
     },
   };
 
@@ -374,6 +385,9 @@ class _SessionEditPageState extends State<SessionEditPage> {
   }
 
   Future<void> _selectTime() async {
+    // Прибираємо фокус з усіх полів перед відкриттям діалогу часу
+    FocusScope.of(context).unfocus();
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime,
@@ -393,15 +407,29 @@ class _SessionEditPageState extends State<SessionEditPage> {
         );
       },
     );
+    
+    // Незалежно від результату, прибираємо фокус після закриття діалогу
+    FocusScope.of(context).unfocus();
+    
     if (picked != null && picked != _selectedTime) {
       setState(() {
         _selectedTime = picked;
       });
     }
+    
+    // Додаткове прибирання фокуса через затримку для надійності
+    Future.delayed(Duration(milliseconds: 300), () {
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+    });
   }
 
   // Показати діалог вибору майстра
   Future<void> _showMasterSelection() async {
+    // Прибираємо фокус з усіх полів перед відкриттям діалогу
+    FocusScope.of(context).unfocus();
+    
     if (_masters.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -493,14 +521,27 @@ class _SessionEditPageState extends State<SessionEditPage> {
       },
     );
 
+    // Незалежно від результату, прибираємо фокус після закриття діалогу
+    FocusScope.of(context).unfocus();
+
     if (selectedMaster != null) {
       setState(() {
         _selectedMasterId = selectedMaster.id!;
       });
     }
+    
+    // Додаткове прибирання фокуса через затримку для надійності
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+    });
   }
 
   Future<void> _showDateSelection() async {
+    // Прибираємо фокус з усіх полів перед відкриттям діалогу дати
+    FocusScope.of(context).unfocus();
+    
     final DateTime initialDate = DateTime.parse(_selectedDate);
     final DateTime? selectedDate = await showDatePicker(
       context: context,
@@ -509,11 +550,21 @@ class _SessionEditPageState extends State<SessionEditPage> {
       lastDate: DateTime.now().add(Duration(days: 365)),
     );
 
+    // Незалежно від результату, прибираємо фокус після закриття діалогу
+    FocusScope.of(context).unfocus();
+
     if (selectedDate != null) {
       setState(() {
         _selectedDate = selectedDate.toIso8601String().split('T')[0];
       });
     }
+    
+    // Додаткове прибирання фокуса через затримку для надійності
+    Future.delayed(Duration(milliseconds: 300), () {
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+    });
   }
 
   Future<void> _updateSession() async {
@@ -580,12 +631,7 @@ class _SessionEditPageState extends State<SessionEditPage> {
         );
         print('Сесія оновлена успішно');
 
-        // Спочатку скасовуємо старе сповіщення
-        try {
-          await NotificationService().cancelSessionReminder(widget.session.id!);
-        } catch (e) {
-          print('Помилка скасування старого сповіщення: $e');
-        }
+
 
         // Плануємо нове сповіщення за 30 хвилин до оновленої сесії
         try {
@@ -598,20 +644,19 @@ class _SessionEditPageState extends State<SessionEditPage> {
             (m) => m.id == updatedSession.masterId,
           );
 
-          // Перетворюємо дату та час в DateTime
-          final sessionDateTime = DateTime.parse(
-            '${updatedSession.date} ${updatedSession.time}:00',
-          );
-
-          await NotificationService().scheduleSessionReminder(
-            sessionId: widget.session.id!,
-            clientName: updatedSession.clientName,
+          print('🔔 Оновлюємо нагадування за 30 хвилин для відредагованої сесії ${widget.session.id}');
+          
+          final fcmService = FCMService();
+          
+          // Використовуємо метод оновлення існуючих сповіщень
+          await fcmService.updateSessionNotifications(
+            session: updatedSession,
             masterName: master.name,
-            sessionDateTime: sessionDateTime,
-            masterId: updatedSession.masterId,
           );
+          
+          print('✅ Нагадування оновлено для сесії ${widget.session.id}');
         } catch (e) {
-          print('Помилка планування нового сповіщення: $e');
+          print('❌ Помилка планування FCM сповіщення: $e');
         }
 
         // Оновлюємо примітки клієнта
@@ -764,14 +809,13 @@ class _SessionEditPageState extends State<SessionEditPage> {
       });
 
       try {
-        // Скасовуємо всі сповіщення та таймери перед видаленням сесії
+        // Скасовуємо FCM сповіщення
         try {
-          final notificationService = NotificationService();
-          await notificationService.cancelSessionReminder(widget.session.id!);
-          notificationService.cancelSessionTimers(widget.session.id!);
-          print('⏹️ Скасовано всі таймери для сесії ${widget.session.id}');
+          final fcmService = FCMService();
+          await fcmService.cancelSessionNotifications(widget.session.id!);
+          print('⏹️ Скасовано всі FCM сповіщення для сесії ${widget.session.id}');
         } catch (e) {
-          print('Помилка скасування сповіщень: $e');
+          print('Помилка скасування FCM сповіщень: $e');
         }
 
         // Видаляємо через AppStateProvider, щоб правильно скасувались таймери
@@ -1317,101 +1361,147 @@ class _SessionEditPageState extends State<SessionEditPage> {
 
                     SizedBox(height: 16),
 
-                    // Телефон з вибором коду країни
+                    // Кастомне поле телефону з завжди видимим кодом країни
                     Consumer<LanguageProvider>(
                       builder: (context, language, child) {
-                        return TextFormField(
-                          controller: _phoneController,
-                          decoration: InputDecoration(
-                            labelText: language.getText('Телефон*', 'Телефон*'),
-                            prefixIcon: Icon(Icons.phone_outlined),
-                            // Випадаючий список з кодом країни як префікс
-                            prefix: Container(
-                              padding: EdgeInsets.only(right: 8),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _selectedCountryCode,
-                                  isDense: true,
-                                  items: PhoneValidator.countryCodes.entries
-                                      .map((entry) {
-                                        final code = entry.key;
-                                        return DropdownMenuItem<String>(
-                                          value: code,
-                                          child: Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              code,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      })
-                                      .toList(),
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null) {
-                                      setState(() {
-                                        _selectedCountryCode = newValue;
-                                        // НЕ очищуємо поле - залишаємо введені цифри
-                                      });
-                                    }
-                                  },
-                                  selectedItemBuilder: (BuildContext context) {
-                                    return PhoneValidator.countryCodes.keys
-                                        .map<Widget>((String code) {
-                                          return Container(
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              code,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          );
-                                        })
-                                        .toList();
-                                  },
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
                                 ),
+                                borderRadius: BorderRadius.circular(12),
+                                color: Theme.of(context).colorScheme.surface,
+                              ),
+                              child: Row(
+                                children: [
+                                  // Іконка телефону
+                                  Padding(
+                                    padding: EdgeInsets.only(left: 12),
+                                    child: Icon(
+                                      Icons.phone_outlined,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  // Випадаючий список коду країни
+                                  DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedCountryCode,
+                                      isDense: true,
+                                      items: PhoneValidator.countryCodes.entries
+                                          .map((entry) {
+                                            final code = entry.key;
+                                            final config = entry.value;
+                                            return DropdownMenuItem<String>(
+                                              value: code,
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 8,
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      config['flag'] ?? '',
+                                                      style: TextStyle(fontSize: 20),
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Text(
+                                                      code,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          })
+                                          .toList(),
+                                      onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                          setState(() {
+                                            _selectedCountryCode = newValue;
+                                          });
+                                        }
+                                      },
+                                      selectedItemBuilder: (BuildContext context) {
+                                        return PhoneValidator.countryCodes.entries
+                                            .map<Widget>((entry) {
+                                              final code = entry.key;
+                                              final config = entry.value;
+                                              return Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 4),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      config['flag'] ?? '',
+                                                      style: TextStyle(fontSize: 16),
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      code,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            })
+                                            .toList();
+                                      },
+                                    ),
+                                  ),
+                                  // Поле введення номера
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _phoneController,
+                                      decoration: InputDecoration(
+                                        hintText: _selectedCountryCode == '+380'
+                                            ? '67 123 4567'
+                                            : _selectedCountryCode == '+40'
+                                            ? '72 123 4567'
+                                            : '176 12345678',
+                                        hintStyle: TextStyle(
+                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                        ),
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 16,
+                                        ),
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(
+                                          _selectedCountryCode == '+380' || _selectedCountryCode == '+40' ? 9 : 11,
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        setState(() {});
+                                      },
+                                      validator: (value) {
+                                        return PhoneValidator.validatePhone(
+                                          _selectedCountryCode,
+                                          value ?? '',
+                                          language,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            hintText: _selectedCountryCode == '+380'
-                                ? '67 123 4567'
-                                : '176 12345678',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                          ),
-                          keyboardType: TextInputType.phone,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(
-                              _selectedCountryCode == '+380' ? 9 : 11,
-                            ),
                           ],
-                          onChanged: (value) {
-                            // Оновлюємо інтерфейс для показу підказки
-                            setState(() {});
-                          },
-                          validator: (value) {
-                            return PhoneValidator.validatePhone(
-                              _selectedCountryCode,
-                              value ?? '',
-                              language,
-                            );
-                          },
                         );
                       },
                     ),
@@ -1666,7 +1756,15 @@ class _SessionEditPageState extends State<SessionEditPage> {
                         // Час
                         Expanded(
                           child: InkWell(
-                            onTap: _selectTime,
+                              onTap: () async {
+                              // Прибираємо фокус перед викликом діалогу часу
+                              FocusScope.of(context).unfocus();
+                              await _selectTime();
+                              // Після повернення з діалогу знову прибираємо фокус
+                              if (mounted) {
+                                FocusScope.of(context).unfocus();
+                              }
+                            },
                             child: Container(
                               padding: EdgeInsets.all(16),
                               decoration: BoxDecoration(

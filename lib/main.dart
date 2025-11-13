@@ -11,8 +11,8 @@ import 'package:nastya_app/services/firestore_service.dart';
 import 'package:nastya_app/providers/app_state_provider.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'package:nastya_app/services/connectivity_service.dart';
-// ТИМЧАСОВО ЗАКОМЕНТОВАНО: import 'package:nastya_app/services/notification_service.dart';
-// ТИМЧАСОВО ЗАКОМЕНТОВАНО: import 'package:nastya_app/services/fcm_service.dart';
+import 'package:nastya_app/services/notification_service.dart';
+import 'package:nastya_app/services/fcm_service.dart';
 import 'package:nastya_app/widgets/no_internet_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -84,13 +84,13 @@ void main() async {
       await appState.initialize();
       print('✅ AppStateProvider готовий');
 
-      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Ініціалізуємо сервіс сповіщень
-      // await NotificationService().initialize();
-      // print('✅ NotificationService готовий');
+      // Ініціалізуємо сервіс сповіщень
+      await NotificationService().initialize();
+      print('✅ NotificationService готовий');
 
-      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Ініціалізуємо FCM сервіс
-      // await FCMService().initialize(languageProvider: languageProvider);
-      // print('✅ FCMService готовий');
+      // Ініціалізуємо FCM сервіс
+      await FCMService().initialize(languageProvider: languageProvider);
+      print('✅ FCMService готовий');
     } catch (e) {
       print('⚠️ Помилка відкладеної ініціалізації: $e');
     }

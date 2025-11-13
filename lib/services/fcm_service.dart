@@ -15,11 +15,11 @@ class FCMService {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   
   String? _fcmToken;
-  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: LanguageProvider? _languageProvider;
+  LanguageProvider? _languageProvider;
 
   /// Ініціалізація FCM сервісу
   Future<void> initialize({LanguageProvider? languageProvider}) async {
-    // ТИМЧАСОВО ЗАКОМЕНТОВАНО: _languageProvider = languageProvider;
+    _languageProvider = languageProvider;
     
     try {
       // Запитуємо дозволи для сповіщень
@@ -196,18 +196,47 @@ class FCMService {
     }
   }
 
+
+
   /// Відправляємо FCM повідомлення про новий запис
   Future<void> sendSessionReminderNotification({
     required Session session,
     required String masterName,
     required DateTime reminderTime,
   }) async {
+    print('📱 FCM: Створюємо нагадування для сесії ${session.id}');
+    
+    // Перевіряємо статус сесії
+    if (session.status != 'в очікуванні') {
+      print('⚠️ FCM: Пропускаємо створення сповіщення - статус: ${session.status}');
+      return;
+    }
+    
     try {
+      // Локалізований текст
+      final title = _languageProvider?.getText(
+        'Нагадування про запис', 
+        'Напоминание о записи'
+      ) ?? 'Нагадування про запис';
+      
+      final bodyText = _languageProvider?.getText(
+        'Через 30 хвилин: ${session.clientName} у майстрині $masterName',
+        'Через 30 минут: ${session.clientName} у мастрицы $masterName'
+      ) ?? 'Через 30 хвилин: ${session.clientName} у майстрині $masterName';
+
+      // Перевіряємо, чи є sessionId
+      if (session.id == null) {
+        print('❌ ПОМИЛКА: session.id є null! Не можна створити FCM сповіщення');
+        return;
+      }
+
+      print('✅ Створюємо FCM сповіщення з sessionId: ${session.id}');
+
       final notificationData = {
         'type': 'session_reminder',
         'sessionId': session.id,
-        'title': 'Нагадування про запис',
-        'body': 'Через 30 хвилин: ${session.clientName} у майстра $masterName',
+        'title': title,
+        'body': bodyText,
         'reminderTime': reminderTime.toIso8601String(),
         'sessionTime': session.time,
         'sessionDate': session.date,
@@ -230,71 +259,143 @@ class FCMService {
     }
   }
 
-  /// Відправляємо FCM повідомлення про завершення сесії
-  Future<void> sendSessionEndNotification({
+
+
+
+
+  /// Оновлюємо заплановані FCM сповіщення для сесії
+  Future<void> updateSessionNotifications({
     required Session session,
     required String masterName,
-    required DateTime endTime,
   }) async {
     try {
-      final notificationData = {
-        'type': 'session_end',
-        'sessionId': session.id,
-        'title': '⏰ Сеанс завершен',
-        'body': '${session.clientName} - ${session.service}\nМайстриня: $masterName\nБудь ласка, оновіть статус запису',
-        'endTime': endTime.toIso8601String(),
-        'sessionTime': session.time,
-        'sessionDate': session.date,
-        'clientName': session.clientName,
-        'masterName': masterName,
-        'service': session.service,
-      };
+      // Перевіряємо статус сесії
+      if (session.status != 'в очікуванні') {
+        print('🗑️ Видаляємо сповіщення для сесії ${session.id} - статус змінено на: ${session.status}');
+        await cancelSessionNotifications(session.id!);
+        return;
+      }
 
-      // Зберігаємо в колекцію scheduled_notifications для обробки Cloud Function
-      await _firestore.collection('scheduled_notifications').add({
-        ...notificationData,
-        'scheduledFor': Timestamp.fromDate(endTime),
-        'processed': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Знаходимо всі незаплановані сповіщення для цієї сесії
+      final notifications = await _firestore
+          .collection('scheduled_notifications')
+          .where('sessionId', isEqualTo: session.id)
+          .where('processed', isEqualTo: false)
+          .get();
 
-      print('📅 FCM сповіщення про завершення заплановано на $endTime');
+      if (notifications.docs.isEmpty) {
+        // Якщо сповіщень немає, створюємо нове (тільки якщо статус "в очікуванні")
+        print('📅 Сповіщень для сесії ${session.id} не знайдено, створюємо нове');
+        await sendSessionReminderNotification(
+          session: session,
+          masterName: masterName,
+          reminderTime: DateTime.parse('${session.date} ${session.time}:00')
+              .subtract(const Duration(minutes: 30)),
+        );
+        return;
+      }
+
+      // Оновлюємо існуючі сповіщення
+      for (final doc in notifications.docs) {
+        final newReminderTime = DateTime.parse('${session.date} ${session.time}:00')
+            .subtract(const Duration(minutes: 30));
+
+        // Перевіряємо, чи нове сповіщення ще актуальне
+        if (newReminderTime.isAfter(DateTime.now())) {
+          // Локалізований текст
+          final title = _languageProvider?.getText(
+            'Нагадування про запис', 
+            'Напоминание о записи'
+          ) ?? 'Нагадування про запис';
+          
+          final bodyText = _languageProvider?.getText(
+            'Через 30 хвилин: ${session.clientName} у майстрині $masterName',
+            'Через 30 минут: ${session.clientName} у мастрицы $masterName'
+          ) ?? 'Через 30 хвилин: ${session.clientName} у майстрині $masterName';
+
+          // Оновлюємо існуюче сповіщення
+          await doc.reference.update({
+            'title': title,
+            'body': bodyText,
+            'reminderTime': newReminderTime.toIso8601String(),
+            'scheduledFor': Timestamp.fromDate(newReminderTime),
+            'sessionTime': session.time,
+            'sessionDate': session.date,
+            'clientName': session.clientName,
+            'masterName': masterName,
+            'service': session.service,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          print('✏️ Оновлено сповіщення ${doc.id} для сесії ${session.id}');
+        } else {
+          // Якщо час вже минув, видаляємо старе сповіщення
+          await doc.reference.delete();
+          print('🗑️ Видалено застаріле сповіщення ${doc.id} для сесії ${session.id}');
+        }
+      }
+
+      print('✅ FCM сповіщення для сесії ${session.id} оновлено');
     } catch (e) {
-      print('❌ Помилка планування FCM сповіщення про завершення: $e');
+      print('❌ Помилка оновлення FCM сповіщень: $e');
     }
   }
 
-  /// Відправляємо FCM повідомлення про автоматичне пропущення
-  Future<void> sendAutoMissedNotification({
+  /// Оновлюємо існуюче сповіщення для сесії замість створення нового
+  Future<void> updateSessionReminderNotification({
     required Session session,
     required String masterName,
-    required DateTime missedTime,
+    required DateTime reminderTime,
   }) async {
+    print('🔄 FCM: Оновлюємо нагадування для сесії ${session.id}');
     try {
+      // Спочатку знаходимо існуюче сповіщення для цієї сесії
+      final existingNotifications = await _firestore
+          .collection('scheduled_notifications')
+          .where('sessionId', isEqualTo: session.id)
+          .where('type', isEqualTo: 'session_reminder')
+          .where('processed', isEqualTo: false)
+          .get();
+
+      // Локалізований текст
+      final title = _languageProvider?.getText(
+        'Нагадування про запис', 
+        'Напоминание о записи'
+      ) ?? 'Нагадування про запис';
+      
+      final bodyText = _languageProvider?.getText(
+        'Через 30 хвилин: ${session.clientName} у майстра $masterName',
+        'Через 30 минут: ${session.clientName} у мастера $masterName'
+      ) ?? 'Через 30 хвилин: ${session.clientName} у майстра $masterName';
+
       final notificationData = {
-        'type': 'auto_missed',
+        'type': 'session_reminder',
         'sessionId': session.id,
-        'title': '❌ Запис пропущено',
-        'body': '${session.clientName} - ${session.service}\nМайстриня: $masterName\nЗапис автоматично позначено як пропущений',
-        'missedTime': missedTime.toIso8601String(),
+        'title': title,
+        'body': bodyText,
+        'reminderTime': reminderTime.toIso8601String(),
         'sessionTime': session.time,
         'sessionDate': session.date,
         'clientName': session.clientName,
         'masterName': masterName,
         'service': session.service,
-      };
-
-      // Зберігаємо в колекцію scheduled_notifications для обробки Cloud Function
-      await _firestore.collection('scheduled_notifications').add({
-        ...notificationData,
-        'scheduledFor': Timestamp.fromDate(missedTime),
+        'scheduledFor': Timestamp.fromDate(reminderTime),
         'processed': false,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      print('📅 FCM сповіщення про автопропущення заплановано на $missedTime');
+      if (existingNotifications.docs.isNotEmpty) {
+        // Оновлюємо існуюче сповіщення
+        final existingDoc = existingNotifications.docs.first;
+        await existingDoc.reference.update(notificationData);
+        print('🔄 Оновлено існуюче FCM сповіщення ${existingDoc.id} на $reminderTime');
+      } else {
+        // Створюємо нове сповіщення якщо немає існуючого
+        await _firestore.collection('scheduled_notifications').add(notificationData);
+        print('📅 Створено нове FCM сповіщення на $reminderTime');
+      }
     } catch (e) {
-      print('❌ Помилка планування FCM сповіщення про автопропущення: $e');
+      print('❌ Помилка оновлення FCM сповіщення: $e');
     }
   }
 
@@ -308,12 +409,10 @@ class FCMService {
           .where('processed', isEqualTo: false)
           .get();
 
-      // Позначаємо їх як скасовані
+      // ОНОВЛЕНО: Видаляємо сповіщення повністю замість позначення cancelled
       for (final doc in notifications.docs) {
-        await doc.reference.update({
-          'cancelled': true,
-          'cancelledAt': FieldValue.serverTimestamp(),
-        });
+        await doc.reference.delete();
+        print('🗑️ Видалено сповіщення ${doc.id} для сесії $sessionId');
       }
 
       print('🗑️ FCM сповіщення для сесії $sessionId скасовано');

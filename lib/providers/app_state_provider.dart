@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:nastya_app/models/models.dart';
 import 'package:nastya_app/services/firestore_service.dart';
-import 'package:nastya_app/services/notification_service.dart';
-// ТИМЧАСОВО ЗАКОМЕНТОВАНО: import 'package:nastya_app/services/fcm_service.dart';
+
+import 'package:nastya_app/services/fcm_service.dart';
 import 'package:nastya_app/providers/language_provider.dart';
 import 'dart:async';
 
@@ -14,7 +14,7 @@ class AppStateProvider extends ChangeNotifier {
   AppStateProvider._internal();
 
   final FirestoreService _firestoreService = FirestoreService();
-  final NotificationService _notificationService = NotificationService();
+
   LanguageProvider? _languageProvider;
 
   /// Встановити провайдер мови для локалізації
@@ -155,8 +155,8 @@ class AppStateProvider extends ChangeNotifier {
         '✅ Дані оновлено з БД о ${_formatTime(_lastUpdate)} (майстри: ${_masters.length}, клієнти: ${_clients.length}, сесії: ${_sessionsByMaster.values.expand((s) => s).length})',
       );
 
-      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для всіх активних сесій
-      // await _scheduleNotificationsForActiveSessions();
+      // Плануємо сповіщення для всіх активних сесій
+      await _scheduleNotificationsForActiveSessions();
     } catch (e) {
       print('❌ Помилка оновлення даних: $e');
     } finally {
@@ -364,7 +364,7 @@ class AppStateProvider extends ChangeNotifier {
     // Перевіряємо, чи є взагалі записи у майстра
     final hasAnySessions = allSessions.isNotEmpty;
 
-    // Фільтруємо тільки сесії на сьогодні і в майбутньому
+    // Фільтруємо сесії на сьогодні і в майбутньому, враховуючи статус
     final sessions = allSessions.where((session) {
       try {
         final dateParts = session.date.split('-');
@@ -373,8 +373,15 @@ class AppStateProvider extends ChangeNotifier {
           int.parse(dateParts[1]),
           int.parse(dateParts[2]),
         );
-        return sessionDate.isAtSameMomentAs(today) ||
+        final isRelevantDate = sessionDate.isAtSameMomentAs(today) ||
             sessionDate.isAfter(today);
+        
+        // Для сьогоднішніх сесій показуємо всі (поточні можуть бути будь-якого статусу)
+        // Для майбутніх - тільки "в очікуvanні"
+        final isRelevantStatus = sessionDate.isAtSameMomentAs(today) || 
+            session.status == 'в очікуванні';
+            
+        return isRelevantDate && isRelevantStatus;
       } catch (e) {
         return false;
       }
@@ -385,10 +392,10 @@ class AppStateProvider extends ChangeNotifier {
     );
     print('📊 Кеш інвалідований: $_cacheInvalidated, останнє завантаження: $_lastDataLoad');
     if (sessions.isNotEmpty) {
-      print('📋 Актуальні сесії: ${sessions.map((s) => '${s.date} ${s.time} ${s.clientName}').join(', ')}');
+      print('📋 Актуальні сесії: ${sessions.map((s) => '${s.date} ${s.time} ${s.clientName} (${s.status})').join(', ')}');
     }
 
-    // Шукаємо поточну сесію (яка зараз триває)
+    // Шукаємо поточну сесію (яка зараз триває і не завершена)
     for (final session in sessions) {
       try {
         final dateParts = session.date.split('-');
@@ -408,12 +415,12 @@ class AppStateProvider extends ChangeNotifier {
             now.isAfter(sessionStartTime) && now.isBefore(sessionEndTime);
         if (isCurrent) {
           print(
-            '🔍 Знайдено поточну сесію: ${session.date} ${session.time} - ${session.clientName}',
+            '🔍 Знайдено поточну сесію: ${session.date} ${session.time} - ${session.clientName} (статус: ${session.status})',
           );
         }
 
-        // Перевіряємо чи сесія зараз триває
-        if (isCurrent) {
+        // Перевіряємо чи сесія зараз триває і не завершена
+        if (isCurrent && session.status != 'успішно') {
           final endTime =
               '${sessionEndTime.hour.toString().padLeft(2, '0')}:${sessionEndTime.minute.toString().padLeft(2, '0')}';
           return {
@@ -428,7 +435,7 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
-    // Якщо поточної сесії немає, шукаємо наступну
+    // Якщо поточної активної сесії немає, шукаємо наступну (тільки "в очікуванні")
     for (final session in sessions) {
       try {
         final dateParts = session.date.split('-');
@@ -441,7 +448,8 @@ class AppStateProvider extends ChangeNotifier {
           int.parse(timeParts[1]),
         );
 
-        if (sessionDateTime.isAfter(now)) {
+        // Показуємо тільки майбутні сесії зі статусом "в очікуванні"
+        if (sessionDateTime.isAfter(now) && session.status == 'в очікуванні') {
           final sessionDate = DateTime(
             int.parse(dateParts[0]),
             int.parse(dateParts[1]),
@@ -513,18 +521,19 @@ class AppStateProvider extends ChangeNotifier {
 
       _calculateNextSessions();
 
-      // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для нової сесії (якщо статус "в очікуванні")
-      // if (updatedSession.status == 'в очікуванні') {
-      //   print('🔄 Плануємо сповіщення для нової сесії ${updatedSession.id}');
-      //   _notificationService.scheduleSessionEndNotification(updatedSession);
-      //   
-      //   // Плануємо FCM сповіщення для крос-девайсної синхронізації
-      //   print('📲 Викликаємо _scheduleFCMNotifications...');
-      //   await _scheduleFCMNotifications(updatedSession);
-      //   print('✅ _scheduleFCMNotifications завершено');
-      // } else {
-      //   print('⚠️ Сесія не в очікуванні, статус: ${updatedSession.status}');
-      // }
+      // Плануємо FCM сповіщення для нової сесії (якщо статус "в очікуванні")
+      print('📊 ДОДАНА СЕСІЯ - ID: ${updatedSession.id}, СТАТУС: ${updatedSession.status}');
+      if (updatedSession.status == 'в очікуванні') {
+        print('🔄 Плануємо FCM сповіщення для нової сесії ${updatedSession.id}');
+        try {
+          await _scheduleFCMNotificationsForSession(updatedSession);
+          print('✅ FCM сповіщення заплановано для сесії ${updatedSession.id}');
+        } catch (e) {
+          print('❌ ПОМИЛКА планування FCM сповіщень: $e');
+        }
+      } else {
+        print('⚠️ Сесія не в очікуванні, статус: ${updatedSession.status}');
+      }
 
       // Інвалідуємо кеш після додавання нового запису
       _lastDataLoad = null;
@@ -578,15 +587,13 @@ class AppStateProvider extends ChangeNotifier {
 
           notifyListeners();
 
-          // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення для оновленої сесії (якщо скасували таймери і сесія активна)
-          // if (shouldCancelTimers && session.status == 'в очікуванні') {
-          //   try {
-          //     _notificationService.scheduleSessionEndNotification(session);
-          //     print('📱 Перепланували таймери для оновленої сесії $sessionId');
-          //   } catch (e) {
-          //     print('❌ Помилка перепланування таймерів: $e');
-          //   }
-          // }
+          // Перепланування сповіщень при редагуванні
+          try {
+            _updateNotificationsForSession(session);
+            print('📱 Оновлено сповіщення для відредагованої сесії $sessionId');
+          } catch (e) {
+            print('❌ Помилка оновлення сповіщень: $e');
+          }
           break;
         }
       }
@@ -598,9 +605,16 @@ class AppStateProvider extends ChangeNotifier {
   Future<bool> deleteSession(String sessionId) async {
     final success = await _firestoreService.deleteSession(sessionId);
     if (success) {
-      // Скасовуємо всі таймери для видаленої сесії
-      cancelSessionNotifications(sessionId);
-      print('⏹️ Скасовано таймери для видаленої сесії $sessionId');
+
+
+      // Скасовуємо FCM сповіщення
+      try {
+        final fcmService = FCMService();
+        await fcmService.cancelSessionNotifications(sessionId);
+        print('⏹️ Скасовано FCM сповіщення для видаленої сесії $sessionId');
+      } catch (e) {
+        print('❌ Помилка скасування FCM сповіщень: $e');
+      }
 
       // Видаляємо з локального стану
       for (final masterId in _sessionsByMaster.keys) {
@@ -648,42 +662,101 @@ class AppStateProvider extends ChangeNotifier {
   // ===== СПОВІЩЕННЯ =====
 
   /// Запланувати сповіщення для всіх активних сесій
-  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Планування сповіщень для активних сесій
-  // Future<void> _scheduleNotificationsForActiveSessions() async {
-  //   try {
-  //     // Ініціалізуємо сервіс сповіщень
-  //     await _notificationService.initialize();
-  //
-  //     // Передаємо провайдер мови в сервіс сповіщень
-  //     if (_languageProvider != null) {
-  //       _notificationService.setLanguageProvider(_languageProvider!);
-  //     }
-  //
-  //     // Збираємо всі сесії
-  //     final allSessions = <Session>[];
-  //     for (final sessions in _sessionsByMaster.values) {
-  //       allSessions.addAll(sessions);
-  //     }
-  //
-  //     // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Плануємо сповіщення
-  //     // await _notificationService.scheduleNotificationsForActiveSessions(
-  //     //   allSessions,
-  //     // );
-  //
-  //     // print('📱 Заплановано сповіщення для активних сесій');
-  //   } catch (e) {
-  //     print('❌ Помилка планування сповіщень: $e');
-  //   }
-  // }
+  /// Планування сповіщень для всіх активних сесій при старті додатку
+  Future<void> _scheduleNotificationsForActiveSessions() async {
+    try {
+
+
+      // Збираємо всі сесії зі статусом "в очікуванні"
+      final activeSessions = <Session>[];
+      for (final sessions in _sessionsByMaster.values) {
+        activeSessions.addAll(sessions.where((s) => s.status == 'в очікуванні'));
+      }
+
+      // Плануємо сповіщення для кожної активної сесії
+      for (final session in activeSessions) {
+        _scheduleNotificationsForSession(session);
+      }
+
+      print('📱 Заплановано сповіщення для ${activeSessions.length} активних сесій');
+    } catch (e) {
+      print('❌ Помилка планування сповіщень: $e');
+    }
+  }
+
+  /// Планування FCM сповіщень для сесії (тільки для статусу "в очікуванні")
+  Future<void> _scheduleFCMNotificationsForSession(Session session) async {
+    // Перевіряємо статус перед плануванням
+    if (session.status != 'в очікуванні') {
+      print('⚠️ Пропускаємо планування FCM для сесії ${session.id} - статус: ${session.status}');
+      return;
+    }
+    
+    try {
+      final fcmService = FCMService();
+      final masterName = await _getMasterName(session.masterId);
+
+      // Тільки нагадування за 30 хвилин до початку
+      final sessionDateTime = DateTime.parse('${session.date} ${session.time}:00');
+      final reminderTime = sessionDateTime.subtract(const Duration(minutes: 30));
+      
+      if (reminderTime.isAfter(DateTime.now())) {
+        await fcmService.sendSessionReminderNotification(
+          session: session,
+          masterName: masterName,
+          reminderTime: reminderTime,
+        );
+        print('📅 FCM нагадування заплановано на $reminderTime');
+      } else {
+        print('⏰ Нагадування не потрібне - сесія занадто скоро');
+      }
+      
+    } catch (e) {
+      print('❌ Помилка планування FCM сповіщень для сесії ${session.id}: $e');
+    }
+  }
+
+  /// Планування сповіщень через FCM (Cloud Functions) - ЗАГЛУШКА
+  void _scheduleNotificationsForSession(Session session) {
+    // Заглушка для сумісності
+    print('📅 Виклик старого методу для сесії ${session.id} - використовуйте _scheduleFCMNotificationsForSession');
+  }
+
+  /// Отримати ім'я майстра за ID
+  Future<String> _getMasterName(String masterId) async {
+    try {
+      final master = await _firestoreService.getMasterById(masterId);
+      if (master != null) {
+        final languageCode = _languageProvider?.currentLocale.languageCode ?? 'uk';
+        return master.getLocalizedName(languageCode);
+      }
+    } catch (e) {
+      print('❌ Помилка отримання імені майстра: $e');
+    }
+    return 'Невідомий майстер';
+  }
+
+  /// FCM автоматично обробляє оновлення сповіщень
+  void _updateNotificationsForSession(Session session) {
+    final sessionId = session.id;
+    if (sessionId == null) {
+      print('⚠️ Сесія не має ID');
+      return;
+    }
+    
+    // FCM автоматично обробляє зміни через trigger функцію
+    print('🔄 Сесія $sessionId оновлена - FCM автоматично обробить зміни');
+  }
+  
 
   /// Скасувати таймери сповіщень для сесії (коли статус змінюється)
   void cancelSessionNotifications(String sessionId) {
-    _notificationService.cancelSessionTimers(sessionId);
+
   }
 
   /// Отримати інформацію про активні таймери (для debug)
   Map<String, dynamic> getTimersInfo() {
-    return _notificationService.getTimersInfo();
+    return {}; // Локальні таймери видалено
   }
 
   // ===== УПРАВЛІННЯ КЕШЕМ =====
@@ -734,69 +807,11 @@ class AppStateProvider extends ChangeNotifier {
     await refreshAllData(forceRefresh: true);
   }
 
-  // ===== FCM СПОВІЩЕННЯ =====
-
-  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Планування FCM сповіщень для крос-девайсної синхронізації
-  // Future<void> _scheduleFCMNotifications(Session session) async {
-  //   try {
-  //     print('🔍 Починаємо планування FCM для сесії ${session.id}');
-  //     print('🔍 Майстер ID: ${session.masterId}');
-  //     print('🔍 Доступні майстри: ${_masters.map((m) => '${m.id}:${m.name}').join(', ')}');
-  //     
-  //     // Отримуємо дані майстрині для сповіщення
-  //     final master = _masters.firstWhere(
-  //       (m) => m.id == session.masterId,
-  //       orElse: () => Master(
-  //         id: session.masterId,
-  //         name: 'Майстриня',
-  //         status: 'active',
-  //       ),
-  //     );
-  //     
-  //     print('🔍 Знайдено майстра: ${master.name}');
-  //
-  //     // Розраховуємо час завершення сесії
-  //     final sessionDateTime = _parseSessionDateTime(session);
-  //     final sessionEndTime = sessionDateTime.add(Duration(minutes: session.duration));
-  //     
-  //     print('🔍 Час сесії: $sessionDateTime');
-  //     print('🔍 Час завершення: $sessionEndTime');
-  //     print('🔍 Тривалість: ${session.duration} хв');
-  //
-  //     // Плануємо FCM сповіщення про завершення сесії
-  //     print('📲 Викликаємо FCMService.sendSessionEndNotification...');
-  //     await FCMService().sendSessionEndNotification(
-  //       session: session,
-  //       masterName: master.name,
-  //       endTime: sessionEndTime,
-  //     );
-  //
-  //     print('✅ FCM сповіщення заплановано для сесії ${session.id}');
-  //   } catch (e) {
-  //     print('❌ Помилка планування FCM сповіщень: $e');
-  //     print('❌ Stack trace: ${e.toString()}');
-  //   }
-  // }
-
-  // ТИМЧАСОВО ЗАКОМЕНТОВАНО: Парсинг дати та часу сесії
-  // DateTime _parseSessionDateTime(Session session) {
-  //   final dateParts = session.date.split('-');
-  //   final timeParts = session.time.split(':');
-  //
-  //   return DateTime(
-  //     int.parse(dateParts[0]),
-  //     int.parse(dateParts[1]),
-  //     int.parse(dateParts[2]),
-  //     int.parse(timeParts[0]),
-  //     int.parse(timeParts[1]),
-  //   );
-  // }
-
   // ===== ОЧИЩЕННЯ =====
 
   void dispose() {
     _autoUpdateTimer?.cancel();
-    _notificationService.dispose();
+
     super.dispose();
   }
 }

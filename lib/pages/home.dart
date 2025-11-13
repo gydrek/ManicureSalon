@@ -247,8 +247,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             content: Consumer<LanguageProvider>(
                               builder: (context, language, child) {
                                 return Text(language.getText(
-                                  'Nogotochki (beta) v1.2.0 (build 4)',
-                                  'Nogotochki (beta) v1.2.0 (build 4)',
+                                  'Nogotochki (beta) v2.0.0 (build 5)',
+                                  'Nogotochki (beta) v2.0.0 (build 5)',
                                 ));
                               },
                             ),
@@ -452,7 +452,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // Отримуємо всі сесії цієї майстрині
     final allSessions = appState.getSessionsForMaster(master.id!);
 
-    // Перевіряємо чи є ТІЛЬКИ поточні записи (без урахування майбутніх)
+    // Перевіряємо чи є активна поточна сесія (враховуючи статус)
     final hasBusySession = allSessions.any((session) {
       try {
         // Парсимо дату сесії (формат: yyyy-mm-dd)
@@ -471,17 +471,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Duration(minutes: session.duration),
         );
 
-        // Перевіряємо ТІЛЬКИ поточну сесію (зараз між початком та кінцем сесії)
+        // Перевіряємо поточну сесію що зараз триває
         final isCurrentSession =
             now.isAfter(sessionStartTime) && now.isBefore(sessionEndTime);
 
+        // Майстер зайнята тільки якщо сесія зараз триває І статус НЕ "успішно"
+        final isBusy = isCurrentSession && session.status != 'успішно';
+
         if (isCurrentSession) {
           print(
-            '🔴 Майстер ${master.name} зайнята ЗАРАЗ: сесія ${session.clientName} до ${sessionEndTime.hour}:${sessionEndTime.minute.toString().padLeft(2, '0')}',
+            '🔴 Майстер ${master.name}: сесія ${session.clientName} до ${sessionEndTime.hour}:${sessionEndTime.minute.toString().padLeft(2, '0')} (статус: ${session.status}) - зайнята: $isBusy',
           );
         }
 
-        return isCurrentSession;
+        return isBusy;
       } catch (e) {
         print(
           'Помилка парсингу дати/часу для сесії: ${session.date} ${session.time}',

@@ -26,6 +26,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Map<String, double> _masterRevenue = {};
   Map<String, Color> _masterColors = {};
   double _totalRevenue = 0.0;
+  
+  // Статистика записів
+  int _totalSessions = 0;
+  int _successfulSessions = 0;
 
   // Кешування та час оновлення
   DateTime? _lastUpdateTime;
@@ -135,12 +139,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       print('📊 Analytics Debug:');
       print('📅 Період: $startDateString - $endDateString');
       print('📊 Знайдено сесій: ${sessions.length}');
+      print('✅ Успішних сесій: ${sessions.where((s) => s.status == "успішно").length}');
       print('👥 Майстрині: ${_masters.map((m) => '${m.name}(${m.id})').join(', ')}');
 
       // Рахуємо записи та загальну ціну по майстрах
       _masterStats.clear();
       _masterRevenue.clear();
       _totalRevenue = 0.0;
+      _totalSessions = sessions.length;
+      _successfulSessions = sessions.where((s) => s.status == "успішно").length;
 
       for (final master in _masters) {
         _masterStats[master.id!] = 0;
@@ -148,7 +155,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       }
 
       for (final session in sessions) {
-        print('📋 Сесія: ${session.clientName}, майстер: ${session.masterId}, ціна: ${session.price}, дата: ${session.date}');
+        print('📋 Сесія: ${session.clientName}, майстер: ${session.masterId}, статус: ${session.status}, ціна: ${session.price}, дата: ${session.date}');
+        
+        // Фільтруємо тільки успішні записи
+        if (session.status != "успішно") {
+          print('⏭️ Пропускаємо сесію зі статусом: ${session.status}');
+          continue;
+        }
         
         if (_masterStats.containsKey(session.masterId)) {
           _masterStats[session.masterId] = _masterStats[session.masterId]! + 1;
@@ -508,66 +521,238 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                       ],
                                     ),
                                     SizedBox(height: 16),
+                                    
+                                    // Основна статистика 2x2
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceAround,
                                       children: [
-                                        Column(
-                                          children: [
-                                            Text(
-                                              '$totalSessions',
-                                              style: TextStyle(
-                                                fontSize: 32,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            Text(
-                                              language.getText(
-                                                'Записів',
-                                                'Записей',
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.9,
+                                        // Ліва колонка - Записи
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              // Успішні записи
+                                              Container(
+                                                padding: EdgeInsets.all(12),
+                                                margin: EdgeInsets.only(bottom: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.check_circle,
+                                                          color: Colors.lightGreenAccent,
+                                                          size: 20,
+                                                        ),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          '$totalSessions',
+                                                          style: TextStyle(
+                                                            fontSize: 24,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Text(
+                                                      language.getText(
+                                                        'Успішних записів',
+                                                        'Успешных записей',
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.white.withValues(alpha: 0.9),
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        Container(
-                                          width: 1,
-                                          height: 50,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.3,
+                                              // Всього записів
+                                              Container(
+                                                padding: EdgeInsets.all(12),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.calendar_today,
+                                                          color: Colors.white70,
+                                                          size: 18,
+                                                        ),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          '$_totalSessions',
+                                                          style: TextStyle(
+                                                            fontSize: 20,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: Colors.white70,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Text(
+                                                      language.getText(
+                                                        'Всього за місяць',
+                                                        'Всего за месяц',
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.white60,
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        Column(
-                                          children: [
-                                            Text(
-                                              '${_totalRevenue.toStringAsFixed(2)}€',
-                                              style: TextStyle(
-                                                fontSize: 32,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            Text(
-                                              language.getText(
-                                                'Загальна ціна',
-                                                'Общая цена',
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.9,
+                                        
+                                        SizedBox(width: 16),
+                                        
+                                        // Права колонка - Доходи
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              // Дохід від успішних
+                                              Container(
+                                                padding: EdgeInsets.all(12),
+                                                margin: EdgeInsets.only(bottom: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.euro,
+                                                          color: Colors.amber,
+                                                          size: 20,
+                                                        ),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          '${_totalRevenue.toStringAsFixed(0)}',
+                                                          style: TextStyle(
+                                                            fontSize: 24,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Text(
+                                                      language.getText(
+                                                        'Дохід (успішні)',
+                                                        'Доход (успешные)',
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.white.withValues(alpha: 0.9),
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              // Потенційний дохід
+                                              Consumer<LanguageProvider>(
+                                                builder: (context, language, child) {
+                                                  // Обчислюємо різницю між загальними та успішними записами
+                                                  final potentialLoss = _totalSessions - _successfulSessions;
+                                                  return Container(
+                                                    padding: EdgeInsets.all(12),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withValues(alpha: 0.1),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Column(
+                                                      children: [
+                                                        Row(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            Icon(
+                                                              potentialLoss > 0 ? Icons.warning_amber : Icons.info_outline,
+                                                              color: potentialLoss > 0 ? Colors.orange[300] : Colors.white70,
+                                                              size: 18,
+                                                            ),
+                                                            SizedBox(width: 6),
+                                                            Text(
+                                                              potentialLoss > 0 ? '$potentialLoss' : '✓',
+                                                              style: TextStyle(
+                                                                fontSize: 20,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: potentialLoss > 0 ? Colors.orange[300] : Colors.white70,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        Text(
+                                                          language.getText(
+                                                            potentialLoss > 0 ? 'Всі інші' : 'Всі записи ОК',
+                                                            potentialLoss > 0 ? 'Все остальные' : 'Все записи ОК',
+                                                          ),
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: Colors.white60,
+                                                          ),
+                                                          textAlign: TextAlign.center,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
+                                    ),
+                                    
+                                    SizedBox(height: 12),
+                                    
+                                    // Пояснення
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.info_outline,
+                                            color: Colors.green[800],
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              language.getText(
+                                                'В аналітиці враховуються тільки успішні записи',
+                                                'В аналитике учитываются только успешные записи',
+                                              ),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green[800],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 );
@@ -576,27 +761,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                           ),
 
                           SizedBox(height: 24),
-
-                          // Заголовок діаграми
-                          Consumer<LanguageProvider>(
-                            builder: (context, language, child) {
-                              return Text(
-                                language.getText(
-                                  'Розподіл записів по майстриням',
-                                  'Распределение записей по мастерицам',
-                                ),
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                ),
-                              );
-                            },
-                          ),
-
-                          SizedBox(height: 16),
 
                           // Кругова діаграма
                           Container(
